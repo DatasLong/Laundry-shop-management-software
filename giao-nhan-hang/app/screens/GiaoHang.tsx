@@ -6,6 +6,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  ScrollView,
 } from "react-native";
 
 export default function GiaoHang() {
@@ -20,7 +21,7 @@ export default function GiaoHang() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>📱 Quét Mã QR / RFID Giao Hàng</Text>
 
@@ -41,8 +42,69 @@ export default function GiaoHang() {
             <Text style={styles.greenText}>Tìm</Text>
           </TouchableOpacity>
         </View>
+        <View style={styles.table}>
+          {[
+            ["Id khách hàng", ""],
+            ["Id đơn hàng", ""],
+            ["Họ và tên khách hàng", ""],
+            ["Số điện thoại", ""],
+            ["Địa chỉ giao hàng", ""],
+            ["Loại sản phẩm", ""],
+            ["Số lượng kiện", ""],
+            ["Trọng lượng (kg)", ""],
+            ["Đơn giá (đ/kg)", ""],
+            ["Trạng thái", ""],
+            ["Tổng tiền", ""],
+          ].map(([label, value], index) => (
+            <View key={index} style={styles.tableRow}>
+              <Text style={styles.tableLabel}>{label}</Text>
+              <Text style={styles.tableValue}>{value}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* XÁC NHẬN TIỀN & GIAO HÀNG */}
+        <View style={styles.confirmRow}>
+          <View style={styles.confirmInputWrap}>
+            <Text style={styles.confirmLabel}>Nhập xác nhận lại tiền:</Text>
+            <TextInput
+              style={styles.confirmInput}
+              placeholder=""
+              keyboardType="numeric"
+            />
+          </View>
+
+          <TouchableOpacity style={styles.deliveryBtn}>
+            <Text style={styles.deliveryText}>🚚 Giao hàng</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+
+      <View style={styles.table}>
+        {/* HEADER */}
+        <View style={[styles.tableRow, styles.tableHeader]}>
+          <Text style={[styles.tableLabel, styles.headerText]}>
+            Mã đơn hàng
+          </Text>
+          <Text style={[styles.tableValue, styles.headerText]}>
+            Tên khách hàng
+          </Text>
+        </View>
+
+        {/* DATA ROWS – demo, sau này thay bằng DB */}
+        {[
+          ["ORD-17230001", "Nguyễn Văn A"],
+          ["ORD-17230002", "Trần Thị B"],
+          ["ORD-17230003", "Lê Văn C"],
+          ["ORD-17230004", "Phạm Thị D"],
+        ].map(([orderId, customerName], index) => (
+          <View key={index} style={styles.tableRow}>
+            <Text style={styles.tableLabel}>{orderId}</Text>
+            <Text style={styles.tableValue}>{customerName}</Text>
+          </View>
+        ))}
+      </View>
+    </ScrollView>
   );
 }
 
@@ -73,4 +135,81 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   greenText: { color: "#fff", fontWeight: "600" },
+
+  table: {
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    alignItems: "flex-start", // QUAN TRỌNG để text dài xuống dòng
+    backgroundColor: "#fff",
+  },
+
+  tableLabel: {
+    width: "40%", // cột trái cố định
+    fontWeight: "600",
+    color: "#374151",
+  },
+
+  tableValue: {
+    width: "60%", // cột phải cố định
+    color: "#111827",
+    flexWrap: "wrap",
+  },
+
+  confirmRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 16,
+    alignItems: "flex-end",
+  },
+
+  confirmInputWrap: {
+    flex: 1,
+  },
+
+  confirmLabel: {
+    fontSize: 12,
+    color: "#374151",
+    marginBottom: 4,
+    fontWeight: "600",
+  },
+
+  confirmInput: {
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 10,
+    padding: 12,
+  },
+
+  deliveryBtn: {
+    backgroundColor: "#dc2626",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 10,
+    justifyContent: "center",
+  },
+
+  deliveryText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
+
+  tableHeader: {
+    backgroundColor: "#fff",
+  },
+
+  headerText: {
+    fontWeight: "800",
+    color: "#111827",
+  },
 });

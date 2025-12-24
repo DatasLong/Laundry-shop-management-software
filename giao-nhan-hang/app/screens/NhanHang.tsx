@@ -16,48 +16,77 @@ export default function NhanHang() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [product, setProduct] = useState("");
-  const [quantity, setQuantity] = useState("1");
+  const [quantity, setQuantity] = useState("");
   const [weight, setWeight] = useState("");
   const [price, setPrice] = useState("");
+
+  const nameRegex = /^[A-Za-zÀ-ỹ\s]{2,}$/;
+  const phoneRegex = /^\d{10,12}$/;
+  const addressRegex = /^[A-Za-z0-9À-ỹ\s,./-]{5,}$/;
+  const productRegex = /^[A-Za-z0-9À-ỹ\s]{2,}$/;
+  const positiveNumberRegex = /^[1-9]\d*(\.\d+)?$/;
 
   const total =
     (Number(quantity) || 0) * (Number(weight) || 0) * (Number(price) || 0);
 
   const createInvoice = async () => {
-    if (!name || !phone) {
-      alert("⚠️ Vui lòng nhập Tên và Số điện thoại!");
+    if (!nameRegex.test(name)) {
+      Alert.alert("Lỗi", "Họ tên không hợp lệ");
+      return;
+    }
+
+    if (!phoneRegex.test(phone)) {
+      Alert.alert("Lỗi", "Số điện thoại phải từ 10–12 chữ số");
+      return;
+    }
+
+    if (address && !addressRegex.test(address)) {
+      Alert.alert("Lỗi", "Địa chỉ không hợp lệ");
+      return;
+    }
+
+    if (product && !productRegex.test(product)) {
+      Alert.alert("Lỗi", "Tên sản phẩm không hợp lệ");
+      return;
+    }
+
+    if (
+      !positiveNumberRegex.test(quantity) ||
+      !positiveNumberRegex.test(weight) ||
+      !positiveNumberRegex.test(price)
+    ) {
+      Alert.alert("Lỗi", "Số lượng, trọng lượng và đơn giá phải > 0");
       return;
     }
 
     try {
-      // ĐÓNG GÓI DỮ LIỆU ĐẦY ĐỦ CÁC CỘT
       const dataToSave = {
-        khachhang_id: phone.trim(), // Cột bạn cần đây
-        order_id: "ORD-" + Date.now(), // Mã đơn hàng duy nhất
+        khachhang_id: phone.trim(),
+        order_id: "ORD-" + Date.now(),
         name,
         phone,
         address,
         product,
-        quantity: Number(quantity) || 0,
-        weight: Number(weight) || 0,
-        price: Number(price) || 0,
-        total: total,
+        quantity: Number(quantity),
+        weight: Number(weight),
+        price: Number(price),
+        total,
+        status: "chưa giao hàng",
         createdAt: new Date().toLocaleString("vi-VN"),
       };
 
       await addDoc(collection(db, "orders"), dataToSave);
-      alert("✅ Đã lưu hóa đơn thành công!");
+      Alert.alert("Thành công", "Đã lưu hóa đơn");
 
-      // Xóa form sau khi lưu
       setName("");
       setPhone("");
       setAddress("");
       setProduct("");
+      setQuantity("");
       setWeight("");
       setPrice("");
-      setQuantity("1");
     } catch (error: any) {
-      alert("❌ Lỗi: " + error.message);
+      Alert.alert("Lỗi", error.message);
     }
   };
 
@@ -67,45 +96,61 @@ export default function NhanHang() {
         <Text style={styles.title}>🧾 Nhập Thông Tin Đơn Hàng</Text>
 
         <Text style={styles.section}>Thông tin khách hàng</Text>
+        <View style={styles.sectionDivider} />
+
+        <Text style={styles.label}>Họ và tên *</Text>
         <TextInput
           style={styles.input}
-          placeholder="Họ và tên *"
+          placeholder="Nguyễn văn A"
           value={name}
           onChangeText={setName}
+          placeholderTextColor="#d1d5db"
         />
+
+        <Text style={styles.label}>Số điện thoại *</Text>
         <TextInput
           style={styles.input}
-          placeholder="Số điện thoại *"
+          placeholder="0912345678"
           value={phone}
-          onChangeText={setPhone}
+          onChangeText={(text) =>
+            setPhone(text.replace(/[^0-9]/g, "").slice(0, 12))
+          }
           keyboardType="phone-pad"
+          placeholderTextColor="#d1d5db"
         />
+
+        <Text style={styles.label}>Địa chỉ giao hàng</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
-          placeholder="Địa chỉ giao hàng"
+          placeholder="123 Đường ABC, Quận XYZ, TP.HCM"
           value={address}
           onChangeText={setAddress}
           multiline
+          placeholderTextColor="#d1d5db"
         />
 
         <Text style={styles.section}>Thông tin hàng hóa</Text>
+        <View style={styles.sectionDivider} />
         <View style={styles.row}>
           <View style={styles.col}>
             <Text style={styles.label}>Loại sản phẩm</Text>
             <TextInput
               style={styles.input}
-              placeholder="Sản phẩm"
+              placeholder="Thực phẩm, Điện tử ..."
               value={product}
               onChangeText={setProduct}
+              placeholderTextColor="#d1d5db"
             />
           </View>
           <View style={styles.col}>
             <Text style={styles.label}>Số lượng kiện</Text>
             <TextInput
               style={styles.input}
+              placeholder="1"
               value={quantity}
-              onChangeText={setQuantity}
+              onChangeText={(text) => setQuantity(text.replace(/[^0-9.]/g, ""))}
               keyboardType="numeric"
+              placeholderTextColor="#d1d5db"
             />
           </View>
         </View>
@@ -115,20 +160,22 @@ export default function NhanHang() {
             <Text style={styles.label}>Trọng lượng (kg)</Text>
             <TextInput
               style={styles.input}
-              placeholder="0"
+              placeholder="5.5"
               value={weight}
-              onChangeText={setWeight}
+              onChangeText={(text) => setWeight(text.replace(/[^0-9.]/g, ""))}
               keyboardType="numeric"
+              placeholderTextColor="#d1d5db"
             />
           </View>
           <View style={styles.col}>
             <Text style={styles.label}>Đơn giá (đ/kg)</Text>
             <TextInput
               style={styles.input}
-              placeholder="0"
+              placeholder="50000"
               value={price}
-              onChangeText={setPrice}
+              onChangeText={(text) => setPrice(text.replace(/[^0-9.]/g, ""))}
               keyboardType="numeric"
+              placeholderTextColor="#d1d5db"
             />
           </View>
         </View>
@@ -168,7 +215,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 8,
   },
-  label: { fontSize: 12, color: "#666", marginBottom: 4 },
+  label: {
+    fontSize: 12,
+    color: "#000",
+    marginBottom: 4,
+    fontWeight: "500",
+  },
+
   input: {
     borderWidth: 1,
     borderColor: "#d1d5db",
@@ -197,4 +250,11 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   buttonText: { color: "#fff", fontWeight: "700" },
+
+  sectionDivider: {
+    height: 2,
+    backgroundColor: "#e5e7eb", // xám nhạt, tinh tế
+    borderRadius: 2,
+    marginBottom: 10,
+  },
 });
