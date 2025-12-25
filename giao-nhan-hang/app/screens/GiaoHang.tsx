@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { ScrollView } from "react-native";
 
 export default function GiaoHang() {
   const [code, setCode] = useState("");
@@ -19,8 +20,25 @@ export default function GiaoHang() {
     Alert.alert("Tạo hóa đơn", `Đã xử lý đơn ${code}`);
   };
 
+  type OrderItem = {
+    id: string;
+    name: string;
+  };
+
+  const orders: OrderItem[] = [];
+
+  // ví dụ có dữ liệu:
+  // const orders = [
+  //   { id: "DH001", name: "Nguyễn Văn A" },
+  //   { id: "DH002", name: "Trần Thị B" },
+  // ];
+
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={{ paddingBottom: 30 }}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.card}>
         <Text style={styles.title}>📱 Quét Mã QR / RFID Giao Hàng</Text>
 
@@ -41,8 +59,63 @@ export default function GiaoHang() {
             <Text style={styles.greenText}>Tìm</Text>
           </TouchableOpacity>
         </View>
+
+        <View style={styles.table}>
+          {[
+            ["Mã khách hàng", ""],
+            ["Mã đơn hàng", ""],
+            ["Số điện thoại", ""],
+            ["Địa chỉ", ""],
+            ["Loại sản phẩm", ""],
+            ["Số lượng", ""],
+            ["Trọng lượng", ""],
+            ["Đơn giá", ""],
+            ["Thành tiền", ""],
+          ].map(([label, value], index) => (
+            <View key={index} style={styles.tableRow}>
+              <Text style={styles.tableLabel}>{label}</Text>
+              <Text style={styles.tableValue}>{value}</Text>
+            </View>
+          ))}
+        </View>
+        <View style={styles.confirmRow}>
+          <TextInput
+            style={styles.confirmInput}
+            placeholder="Nhập xác nhận tổng tiền"
+            keyboardType="numeric"
+          />
+
+          <TouchableOpacity style={styles.confirmBtn}>
+            <Text style={styles.confirmBtnText}>Xác nhận giao hàng</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+
+      <View style={[styles.card, { marginTop: 16 }]}>
+        <Text style={styles.title}>🧾 Danh sách khách hàng chưa giao hàng</Text>
+
+        <View style={styles.table}>
+          {/* HEADER */}
+          <View style={[styles.tableRow, styles.tableHeader]}>
+            <Text style={[styles.tableCell, styles.headerText]}>
+              Mã đơn hàng
+            </Text>
+            <Text style={[styles.tableCell, styles.headerText]}>
+              Tên khách hàng
+            </Text>
+          </View>
+
+          {/* BODY */}
+          {orders.length > 0 &&
+            orders.map((item, index) => (
+              <View key={index} style={styles.tableRow}>
+                <Text style={styles.tableCell}>{item.id}</Text>
+                <Text style={styles.tableCell}>{item.name}</Text>
+              </View>
+            ))}
+        </View>
+      </View>
+    </ScrollView>
   );
 }
 
@@ -73,4 +146,78 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   greenText: { color: "#fff", fontWeight: "600" },
+
+  table: {
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 10,
+    overflow: "hidden",
+  },
+  tableRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  tableLabel: {
+    width: "40%",
+    backgroundColor: "#f3f4f6",
+    padding: 10,
+    fontWeight: "600",
+    color: "#374151",
+  },
+  tableValue: {
+    width: "60%",
+    padding: 10,
+    color: "#111827",
+  },
+
+  tableHeader: {
+    backgroundColor: "#e5e7eb",
+  },
+
+  headerText: {
+    flex: 1,
+    padding: 10,
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  tableCell: {
+    flex: 1,
+    padding: 10,
+    color: "#111827",
+  },
+
+  confirmRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 16,
+  },
+
+  confirmLabel: {
+    fontWeight: "600",
+    color: "#374151",
+  },
+
+  confirmInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 10,
+    padding: 10,
+  },
+
+  confirmBtn: {
+    backgroundColor: "#dc2626",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+
+  confirmBtnText: {
+    color: "#fff",
+    fontWeight: "600",
+  },
 });
