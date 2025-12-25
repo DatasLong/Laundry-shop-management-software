@@ -6,13 +6,14 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  Alert,
 } from "react-native";
 import { db } from "./firebaseConfig";
 import { collection, addDoc } from "firebase/firestore";
 
+/**
+ * Cấu trúc dữ liệu đơn hàng lưu trong Firestore
+ */
 type OrderType = {
-  khachhang_id: string;
   order_id: string;
   name: string;
   phone: string;
@@ -27,66 +28,70 @@ type OrderType = {
 };
 
 export default function NhanHang() {
+  // Thông tin khách hàng
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
+
+  // Thông tin hàng hóa
   const [product, setProduct] = useState("");
   const [quantity, setQuantity] = useState("");
   const [weight, setWeight] = useState("");
   const [price, setPrice] = useState("");
-  const [invoiceText, setInvoiceText] = useState(""); // Thêm state lưu text hóa đơn
 
+  // Text hóa đơn hiển thị sau khi tạo
+  const [invoiceText, setInvoiceText] = useState("");
+
+  // Thành tiền = số kiện * trọng lượng * đơn giá
   const total =
     (Number(quantity) || 0) * (Number(weight) || 0) * (Number(price) || 0);
 
+  // Tạo và lưu hóa đơn vào Firestore
   const createInvoice = async () => {
     if (!name || !phone) {
       alert("⚠️ Vui lòng nhập Tên và Số điện thoại!");
       return;
     }
 
-    try {
-      // ĐÓNG GÓI DỮ LIỆU ĐẦY ĐỦ CÁC CỘT, THÊM status
-      const dataToSave: OrderType = {
-        khachhang_id: phone.trim(),
-        order_id: "ORD-" + Date.now(),
-        name,
-        phone,
-        address,
-        product,
-        quantity: Number(quantity) || 0,
-        weight: Number(weight) || 0,
-        price: Number(price) || 0,
-        total: total,
-        status: "Chưa giao hàng",
-        createdAt: new Date().toLocaleString("vi-VN"),
-      };
+    const orderData: OrderType = {
+      order_id: "ORD-" + Date.now(),
+      name,
+      phone,
+      address,
+      product,
+      quantity: Number(quantity) || 0,
+      weight: Number(weight) || 0,
+      price: Number(price) || 0,
+      total,
+      status: "Chưa giao hàng",
+      createdAt: new Date().toLocaleString("vi-VN"),
+    };
 
-      await addDoc(collection(db, "orders"), dataToSave);
+    try {
+      await addDoc(collection(db, "orders"), orderData);
       alert("✅ Đã lưu hóa đơn thành công!");
 
-      generateInvoiceText(dataToSave); // Gọi hàm tạo hóa đơn dạng text và hiển thị
+      generateInvoiceText(orderData);
 
-      // Xóa form sau khi lưu
+      // Reset form
       setName("");
       setPhone("");
       setAddress("");
       setProduct("");
+      setQuantity("");
       setWeight("");
       setPrice("");
-      setQuantity("");
     } catch (error: any) {
       alert("❌ Lỗi: " + error.message);
     }
   };
 
-  // Hàm tạo hóa đơn dạng text giống Bách Hóa Xanh (bỏ thông tin nhân viên)
+  // Sinh nội dung hóa đơn dạng text để hiển thị
   const generateInvoiceText = (order: OrderType) => {
-    const text = `
+    setInvoiceText(`
 ------------------------------
-          BÁCH HÓA XANH
+        BÁCH HÓA XANH
 ------------------------------
-Mã khách hàng: ${order.khachhang_id}
 Mã đơn hàng: ${order.order_id}
 Họ tên: ${order.name}
 Số điện thoại: ${order.phone}
@@ -102,9 +107,7 @@ Thành tiền: ${order.total.toLocaleString("vi-VN")} đ
 Trạng thái: ${order.status}
 Ngày tạo: ${order.createdAt}
 ------------------------------
-    `;
-
-    setInvoiceText(text);
+`);
   };
 
   return (
@@ -115,87 +118,69 @@ Ngày tạo: ${order.createdAt}
         <Text style={styles.section}>Thông tin khách hàng</Text>
         <View style={styles.sectionDivider} />
 
-        <Text style={styles.label}>Họ và tên *</Text>
         <TextInput
           style={styles.input}
-          placeholder="Nguyễn Văn A"
+          placeholder="Họ và tên *"
           value={name}
           onChangeText={setName}
-          placeholderTextColor="#9ca3af"
         />
-        <Text style={styles.label}>Số điện thoại *</Text>
+
         <TextInput
           style={styles.input}
-          placeholder="0912345678"
+          placeholder="Số điện thoại *"
           value={phone}
           onChangeText={setPhone}
           keyboardType="phone-pad"
-          placeholderTextColor="#9ca3af"
         />
-        <Text style={styles.label}>Địa chỉ *</Text>
+
         <TextInput
           style={[styles.input, styles.textArea]}
-          placeholder="123 Đường ABC, Quận XYZ, TP.HCM"
+          placeholder="Địa chỉ"
           value={address}
           onChangeText={setAddress}
           multiline
-          placeholderTextColor="#9ca3af"
         />
 
         <Text style={styles.section}>Thông tin hàng hóa</Text>
         <View style={styles.sectionDivider} />
 
         <View style={styles.row}>
-          <View style={styles.col}>
-            <Text style={styles.label}>Loại sản phẩm</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Thực phẩm, Điện tử"
-              value={product}
-              onChangeText={setProduct}
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
-          <View style={styles.col}>
-            <Text style={styles.label}>Số lượng kiện</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="1"
-              value={quantity}
-              onChangeText={setQuantity}
-              keyboardType="numeric"
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
+          <TextInput
+            style={[styles.input, styles.col]}
+            placeholder="Loại sản phẩm"
+            value={product}
+            onChangeText={setProduct}
+          />
+
+          <TextInput
+            style={[styles.input, styles.col]}
+            placeholder="Số lượng kiện"
+            value={quantity}
+            onChangeText={setQuantity}
+            keyboardType="numeric"
+          />
         </View>
 
         <View style={styles.row}>
-          <View style={styles.col}>
-            <Text style={styles.label}>Trọng lượng (kg)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="5.5"
-              value={weight}
-              onChangeText={setWeight}
-              keyboardType="numeric"
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
-          <View style={styles.col}>
-            <Text style={styles.label}>Đơn giá (đ/kg)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="50000"
-              value={price}
-              onChangeText={setPrice}
-              keyboardType="numeric"
-              placeholderTextColor="#9ca3af"
-            />
-          </View>
+          <TextInput
+            style={[styles.input, styles.col]}
+            placeholder="Trọng lượng (kg)"
+            value={weight}
+            onChangeText={setWeight}
+            keyboardType="numeric"
+          />
+
+          <TextInput
+            style={[styles.input, styles.col]}
+            placeholder="Đơn giá (đ/kg)"
+            value={price}
+            onChangeText={setPrice}
+            keyboardType="numeric"
+          />
         </View>
 
         <View style={styles.totalBox}>
-          <Text style={styles.totalLabel}>Thành tiền dự kiến:</Text>
+          <Text>Thành tiền:</Text>
           <Text style={styles.totalValue}>
             {total.toLocaleString("vi-VN")} đ
           </Text>
@@ -205,12 +190,11 @@ Ngày tạo: ${order.createdAt}
           <Text style={styles.buttonText}>✅ Tạo Hóa Đơn</Text>
         </TouchableOpacity>
 
-        {/* Hiển thị hóa đơn dạng text */}
-        {invoiceText ? (
+        {invoiceText !== "" && (
           <View style={styles.invoiceBox}>
             <Text style={styles.invoiceText}>{invoiceText}</Text>
           </View>
-        ) : null}
+        )}
       </View>
     </ScrollView>
   );
@@ -218,29 +202,26 @@ Ngày tạo: ${order.createdAt}
 
 const styles = StyleSheet.create({
   wrapper: { padding: 12 },
+
   card: {
     backgroundColor: "#fff",
     borderRadius: 18,
     padding: 16,
     elevation: 4,
   },
+
   title: {
     fontSize: 18,
     fontWeight: "700",
     textAlign: "center",
     marginBottom: 16,
   },
+
   section: {
     fontWeight: "700",
     color: "#4338ca",
     marginTop: 12,
     marginBottom: 8,
-  },
-  label: {
-    fontSize: 13,
-    color: "#111827", // đen
-    fontWeight: "700",
-    marginBottom: 6,
   },
 
   input: {
@@ -250,9 +231,21 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10,
   },
-  textArea: { height: 60, textAlignVertical: "top" },
-  row: { flexDirection: "row", gap: 10 },
-  col: { flex: 1 },
+
+  textArea: {
+    height: 60,
+    textAlignVertical: "top",
+  },
+
+  row: {
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  col: {
+    flex: 1,
+  },
+
   totalBox: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -261,8 +254,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 10,
   },
-  totalLabel: { fontWeight: "600" },
-  totalValue: { fontWeight: "800", color: "#4338ca", fontSize: 16 },
+
+  totalValue: {
+    fontWeight: "800",
+    color: "#4338ca",
+    fontSize: 16,
+  },
+
   button: {
     backgroundColor: "#4f46e5",
     padding: 15,
@@ -270,7 +268,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 16,
   },
-  buttonText: { color: "#fff", fontWeight: "700" },
+
+  buttonText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
 
   invoiceBox: {
     marginTop: 20,
@@ -278,17 +280,17 @@ const styles = StyleSheet.create({
     backgroundColor: "#eef2ff",
     borderRadius: 12,
   },
+
   invoiceText: {
     fontFamily: "monospace",
     fontSize: 14,
-    color: "#111827",
     lineHeight: 20,
   },
+
   sectionDivider: {
     height: 1,
     backgroundColor: "#d1d5db",
-    width: "100%", // dài hết khung
-    marginTop: 2, // RẤT sát chữ
+    width: "100%",
     marginBottom: 12,
   },
 });

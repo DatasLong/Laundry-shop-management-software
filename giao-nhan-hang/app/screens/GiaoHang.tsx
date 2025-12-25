@@ -33,85 +33,116 @@ type Order = {
 
 export default function GiaoHang() {
   const [code, setCode] = useState("");
-  const [order, setOrder] = useState<Order | null>(null);
-  const [orderDocId, setOrderDocId] = useState<string | null>(null);
-  const [confirmTotal, setConfirmTotal] = useState("");
 
+  // Card 1
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [orderDocIds, setOrderDocIds] = useState<string[]>([]);
+  const [confirmTotals, setConfirmTotals] = useState<{ [key: number]: string }>(
+    {}
+  );
+
+  // Card 2
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
 
-  // Load danh sách các đơn Chưa giao hàng
+  // Load danh sách đơn chưa giao (Card 2)
   const loadPendingOrders = async () => {
     try {
-      const ordersRef = collection(db, "orders");
-      const q = query(ordersRef, where("status", "==", "Chưa giao hàng"));
-      const querySnapshot = await getDocs(q);
-
-      const orders: Order[] = querySnapshot.docs.map((docSnap) => {
-        const data = docSnap.data() as Order;
-        return data;
-      });
-      setPendingOrders(orders);
+      const q = query(
+        collection(db, "orders"),
+        where("status", "==", "Chưa giao hàng")
+      );
+      const snapshot = await getDocs(q);
+      const list: Order[] = snapshot.docs.map(
+        (docSnap) => docSnap.data() as Order
+      );
+      setPendingOrders(list);
     } catch (error: any) {
       Alert.alert("Lỗi", error.message);
     }
   };
 
   useEffect(() => {
-    // Load lần đầu khi mở màn hình
     loadPendingOrders();
   }, []);
 
-  // Tìm đơn hàng theo mã
+  // 🔍 Tìm kiếm (mã / ngày / trạng thái)
   const handleSearchOrder = async () => {
     if (!code.trim()) {
-      Alert.alert("Lỗi", "Nhập mã đơn hàng");
+      Alert.alert("Lỗi", "Nhập mã / ngày / trạng thái");
       return;
     }
-    try {
-      const ordersRef = collection(db, "orders");
-      const q = query(ordersRef, where("order_id", "==", code.trim()));
-      const querySnapshot = await getDocs(q);
 
-      if (querySnapshot.empty) {
-        Alert.alert("Thông báo", "Không tìm thấy đơn hàng này!");
-        setOrder(null);
-        setOrderDocId(null);
+    try {
+      const keyword = code.trim();
+      let q;
+
+      if (/^\d{4}-\d{2}-\d{2}$/.test(keyword)) {
+        // tìm theo ngày
+        q = query(
+          collection(db, "orders"),
+          where("createdDate", "==", keyword)
+        );
+      } else if (keyword === "Chưa giao hàng" || keyword === "Đã giao hàng") {
+        // tìm theo trạng thái
+        q = query(collection(db, "orders"), where("status", "==", keyword));
+      } else {
+        // tìm theo mã đơn
+        q = query(collection(db, "orders"), where("order_id", "==", keyword));
+      }
+
+      const snapshot = await getDocs(q);
+
+      if (snapshot.empty) {
+        Alert.alert("Thông báo", "Không tìm thấy đơn hàng!");
+        setOrders([]);
+        setOrderDocIds([]);
         return;
       }
 
-      const docSnap = querySnapshot.docs[0];
-      const data = docSnap.data() as Order;
+      const list: Order[] = [];
+      const ids: string[] = [];
 
-      setOrder({ ...data, status: data.status || "Chưa giao hàng" });
-      setOrderDocId(docSnap.id);
+      snapshot.forEach((docSnap) => {
+        list.push(docSnap.data() as Order);
+        ids.push(docSnap.id);
+      });
+
+      setOrders(list);
+      setOrderDocIds(ids);
+      setConfirmTotals({});
     } catch (error: any) {
       Alert.alert("Lỗi", error.message);
     }
   };
 
-  // Xác nhận giao hàng
-  const handleConfirmDelivery = async () => {
-    if (!order || !orderDocId) {
-      Alert.alert("Lỗi", "Chưa tìm thấy đơn hàng để xác nhận!");
+  // 🚚 Xác nhận giao hàng theo từng đơn
+  const handleConfirmDelivery = async (index: number) => {
+    const order = orders[index];
+    const docId = orderDocIds[index];
+    const inputTotal = Number(confirmTotals[index]);
+
+    if (!docId) {
+      Alert.alert("Lỗi", "Không xác định được đơn hàng!");
       return;
     }
 
-    const totalNumber = Number(confirmTotal);
-    if (isNaN(totalNumber) || totalNumber !== order.total) {
+    if (isNaN(inputTotal) || inputTotal !== order.total) {
       Alert.alert("Lỗi", "Tổng tiền nhập không đúng!");
       return;
     }
 
     try {
-      const orderRef = doc(db, "orders", orderDocId);
-      await updateDoc(orderRef, { status: "Đã giao hàng" });
+      await updateDoc(doc(db, "orders", docId), {
+        status: "Đã giao hàng",
+      });
 
-      // Cập nhật UI Card 1 ngay
-      setOrder({ ...order, status: "Đã giao hàng" });
-      setConfirmTotal("");
-      Alert.alert("Thành công", "✅ Xác nhận giao hàng thành công!");
+      Alert.alert("Thành công", "✅ Đã xác nhận giao hàng");
 
-      // Load lại Card 2
+      // update UI tại chỗ
+      const newOrders = [...orders];
+      newOrders[index] = { ...order, status: "Đã giao hàng" };
+      setOrders(newOrders);
+
       loadPendingOrders();
     } catch (error: any) {
       Alert.alert("Lỗi", error.message);
@@ -132,12 +163,14 @@ export default function GiaoHang() {
           <Text style={styles.scanText}>📷 Bật Camera Quét QR</Text>
         </TouchableOpacity>
 
-        <Text style={styles.or}>Hoặc nhập mã đơn hàng thủ công</Text>
+        <Text style={styles.or}>
+          Nhập mã đơn / ngày (yyyy-mm-dd) / trạng thái
+        </Text>
 
         <View style={styles.row}>
           <TextInput
             style={styles.input}
-            placeholder="Nhập mã đơn hàng..."
+            placeholder="VD: ORD-xxx | 2025-12-25 | Chưa giao hàng"
             value={code}
             onChangeText={setCode}
           />
@@ -146,58 +179,65 @@ export default function GiaoHang() {
           </TouchableOpacity>
         </View>
 
-        {/* Table dọc */}
-        <View style={styles.table}>
-          {[
-            ["Mã khách hàng", order?.khachhang_id || ""],
-            ["Mã đơn hàng", order?.order_id || ""],
-            ["Số điện thoại", order?.phone || ""],
-            ["Địa chỉ", order?.address || ""],
-            ["Loại sản phẩm", order?.product || ""],
-            ["Số lượng", order?.quantity?.toString() || ""],
-            ["Trọng lượng", order?.weight?.toString() || ""],
-            ["Đơn giá", order?.price?.toString() || ""],
-            ["Thành tiền", order?.total?.toString() || ""],
-            ["Trạng thái", order?.status || ""],
-          ].map(([label, value], index) => (
-            <View key={index} style={styles.tableRow}>
-              <Text style={styles.tableLabel}>{label}</Text>
-              <Text
-                style={[
-                  styles.tableValue,
-                  label === "Trạng thái" && value === "Đã giao hàng"
-                    ? { color: "#16a34a", fontWeight: "700" }
-                    : {},
-                ]}
-              >
-                {value}
-              </Text>
+        {/* DANH SÁCH ĐƠN */}
+        {orders.map((order, idx) => (
+          <View key={idx} style={{ marginTop: 20 }}>
+            <Text style={{ fontWeight: "700", marginBottom: 6 }}>
+              📦 Đơn hàng {idx + 1}
+            </Text>
+
+            <View style={styles.table}>
+              {[
+                ["Mã đơn hàng", order.order_id],
+                ["Số điện thoại", order.phone],
+                ["Địa chỉ", order.address],
+                ["Loại sản phẩm", order.product],
+                ["Số lượng", order.quantity.toString()],
+                ["Trọng lượng", order.weight.toString()],
+                ["Đơn giá", order.price.toString()],
+                ["Thành tiền", order.total.toString()],
+                ["Trạng thái", order.status],
+              ].map(([label, value], i) => (
+                <View key={i} style={styles.tableRow}>
+                  <Text style={styles.tableLabel}>{label}</Text>
+                  <Text
+                    style={[
+                      styles.tableValue,
+                      label === "Trạng thái" && value === "Đã giao hàng"
+                        ? { color: "#16a34a", fontWeight: "700" }
+                        : {},
+                    ]}
+                  >
+                    {value}
+                  </Text>
+                </View>
+              ))}
             </View>
-          ))}
-        </View>
 
-        {/* Xác nhận tổng tiền */}
-        {order?.status === "Chưa giao hàng" && (
-          <View style={styles.confirmRow}>
-            <TextInput
-              style={styles.confirmInput}
-              placeholder="Nhập xác nhận tổng tiền"
-              keyboardType="numeric"
-              value={confirmTotal}
-              onChangeText={setConfirmTotal}
-            />
-
-            <TouchableOpacity
-              style={styles.confirmBtn}
-              onPress={handleConfirmDelivery}
-            >
-              <Text style={styles.confirmBtnText}>Xác nhận giao hàng</Text>
-            </TouchableOpacity>
+            {order.status === "Chưa giao hàng" && (
+              <View style={styles.confirmRow}>
+                <TextInput
+                  style={styles.confirmInput}
+                  placeholder="Nhập xác nhận tổng tiền"
+                  keyboardType="numeric"
+                  value={confirmTotals[idx] || ""}
+                  onChangeText={(text) =>
+                    setConfirmTotals((prev) => ({ ...prev, [idx]: text }))
+                  }
+                />
+                <TouchableOpacity
+                  style={styles.confirmBtn}
+                  onPress={() => handleConfirmDelivery(idx)}
+                >
+                  <Text style={styles.confirmBtnText}>Xác nhận giao hàng</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
-        )}
+        ))}
       </View>
 
-      {/* CARD 2 */}
+      {/* CARD 2 – GIỮ NGUYÊN */}
       <View style={[styles.card, { marginTop: 16 }]}>
         <Text style={styles.title}>🧾 Danh sách khách hàng chưa giao hàng</Text>
 
