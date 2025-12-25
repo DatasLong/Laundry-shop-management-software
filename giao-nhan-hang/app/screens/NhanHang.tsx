@@ -31,7 +31,7 @@ export default function NhanHang() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [product, setProduct] = useState("");
-  const [quantity, setQuantity] = useState("1");
+  const [quantity, setQuantity] = useState("");
   const [weight, setWeight] = useState("");
   const [price, setPrice] = useState("");
   const [invoiceText, setInvoiceText] = useState(""); // Thêm state lưu text hóa đơn
@@ -74,7 +74,7 @@ export default function NhanHang() {
       setProduct("");
       setWeight("");
       setPrice("");
-      setQuantity("1");
+      setQuantity("");
     } catch (error: any) {
       alert("❌ Lỗi: " + error.message);
     }
@@ -113,45 +113,58 @@ Ngày tạo: ${order.createdAt}
         <Text style={styles.title}>🧾 Nhập Thông Tin Đơn Hàng</Text>
 
         <Text style={styles.section}>Thông tin khách hàng</Text>
+        <View style={styles.sectionDivider} />
+
+        <Text style={styles.label}>Họ và tên *</Text>
         <TextInput
           style={styles.input}
-          placeholder="Họ và tên *"
+          placeholder="Nguyễn Văn A"
           value={name}
           onChangeText={setName}
+          placeholderTextColor="#9ca3af"
         />
+        <Text style={styles.label}>Số điện thoại *</Text>
         <TextInput
           style={styles.input}
-          placeholder="Số điện thoại *"
+          placeholder="0912345678"
           value={phone}
           onChangeText={setPhone}
           keyboardType="phone-pad"
+          placeholderTextColor="#9ca3af"
         />
+        <Text style={styles.label}>Địa chỉ *</Text>
         <TextInput
           style={[styles.input, styles.textArea]}
-          placeholder="Địa chỉ giao hàng"
+          placeholder="123 Đường ABC, Quận XYZ, TP.HCM"
           value={address}
           onChangeText={setAddress}
           multiline
+          placeholderTextColor="#9ca3af"
         />
 
         <Text style={styles.section}>Thông tin hàng hóa</Text>
+        <View style={styles.sectionDivider} />
+
         <View style={styles.row}>
           <View style={styles.col}>
             <Text style={styles.label}>Loại sản phẩm</Text>
             <TextInput
               style={styles.input}
-              placeholder="Sản phẩm"
+              placeholder="Thực phẩm, Điện tử"
               value={product}
               onChangeText={setProduct}
+              placeholderTextColor="#9ca3af"
             />
           </View>
           <View style={styles.col}>
             <Text style={styles.label}>Số lượng kiện</Text>
             <TextInput
               style={styles.input}
+              placeholder="1"
               value={quantity}
               onChangeText={setQuantity}
               keyboardType="numeric"
+              placeholderTextColor="#9ca3af"
             />
           </View>
         </View>
@@ -161,20 +174,22 @@ Ngày tạo: ${order.createdAt}
             <Text style={styles.label}>Trọng lượng (kg)</Text>
             <TextInput
               style={styles.input}
-              placeholder="0"
+              placeholder="5.5"
               value={weight}
               onChangeText={setWeight}
               keyboardType="numeric"
+              placeholderTextColor="#9ca3af"
             />
           </View>
           <View style={styles.col}>
             <Text style={styles.label}>Đơn giá (đ/kg)</Text>
             <TextInput
               style={styles.input}
-              placeholder="0"
+              placeholder="50000"
               value={price}
               onChangeText={setPrice}
               keyboardType="numeric"
+              placeholderTextColor="#9ca3af"
             />
           </View>
         </View>
@@ -221,7 +236,13 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginBottom: 8,
   },
-  label: { fontSize: 12, color: "#666", marginBottom: 4 },
+  label: {
+    fontSize: 13,
+    color: "#111827", // đen
+    fontWeight: "700",
+    marginBottom: 6,
+  },
+
   input: {
     borderWidth: 1,
     borderColor: "#d1d5db",
@@ -262,5 +283,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#111827",
     lineHeight: 20,
+  },
+  sectionDivider: {
+    height: 1,
+    backgroundColor: "#d1d5db",
+    width: "100%", // dài hết khung
+    marginTop: 2, // RẤT sát chữ
+    marginBottom: 12,
   },
 });
