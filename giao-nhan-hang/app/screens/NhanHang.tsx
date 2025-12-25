@@ -11,6 +11,21 @@ import {
 import { db } from "./firebaseConfig";
 import { collection, addDoc } from "firebase/firestore";
 
+type OrderType = {
+  khachhang_id: string;
+  order_id: string;
+  name: string;
+  phone: string;
+  address: string;
+  product: string;
+  quantity: number;
+  weight: number;
+  price: number;
+  total: number;
+  status: string;
+  createdAt: string;
+};
+
 export default function NhanHang() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -19,6 +34,7 @@ export default function NhanHang() {
   const [quantity, setQuantity] = useState("1");
   const [weight, setWeight] = useState("");
   const [price, setPrice] = useState("");
+  const [invoiceText, setInvoiceText] = useState(""); // Thêm state lưu text hóa đơn
 
   const total =
     (Number(quantity) || 0) * (Number(weight) || 0) * (Number(price) || 0);
@@ -30,10 +46,10 @@ export default function NhanHang() {
     }
 
     try {
-      // ĐÓNG GÓI DỮ LIỆU ĐẦY ĐỦ CÁC CỘT
-      const dataToSave = {
-        khachhang_id: phone.trim(), // Cột bạn cần đây
-        order_id: "ORD-" + Date.now(), // Mã đơn hàng duy nhất
+      // ĐÓNG GÓI DỮ LIỆU ĐẦY ĐỦ CÁC CỘT, THÊM status
+      const dataToSave: OrderType = {
+        khachhang_id: phone.trim(),
+        order_id: "ORD-" + Date.now(),
         name,
         phone,
         address,
@@ -42,11 +58,14 @@ export default function NhanHang() {
         weight: Number(weight) || 0,
         price: Number(price) || 0,
         total: total,
+        status: "Chưa giao hàng",
         createdAt: new Date().toLocaleString("vi-VN"),
       };
 
       await addDoc(collection(db, "orders"), dataToSave);
       alert("✅ Đã lưu hóa đơn thành công!");
+
+      generateInvoiceText(dataToSave); // Gọi hàm tạo hóa đơn dạng text và hiển thị
 
       // Xóa form sau khi lưu
       setName("");
@@ -59,6 +78,33 @@ export default function NhanHang() {
     } catch (error: any) {
       alert("❌ Lỗi: " + error.message);
     }
+  };
+
+  // Hàm tạo hóa đơn dạng text giống Bách Hóa Xanh (bỏ thông tin nhân viên)
+  const generateInvoiceText = (order: OrderType) => {
+    const text = `
+------------------------------
+          BÁCH HÓA XANH
+------------------------------
+Mã khách hàng: ${order.khachhang_id}
+Mã đơn hàng: ${order.order_id}
+Họ tên: ${order.name}
+Số điện thoại: ${order.phone}
+Địa chỉ: ${order.address}
+
+Sản phẩm: ${order.product}
+Số lượng kiện: ${order.quantity}
+Trọng lượng (kg): ${order.weight}
+Đơn giá (đ/kg): ${order.price}
+
+Thành tiền: ${order.total.toLocaleString("vi-VN")} đ
+------------------------------
+Trạng thái: ${order.status}
+Ngày tạo: ${order.createdAt}
+------------------------------
+    `;
+
+    setInvoiceText(text);
   };
 
   return (
@@ -143,6 +189,13 @@ export default function NhanHang() {
         <TouchableOpacity style={styles.button} onPress={createInvoice}>
           <Text style={styles.buttonText}>✅ Tạo Hóa Đơn</Text>
         </TouchableOpacity>
+
+        {/* Hiển thị hóa đơn dạng text */}
+        {invoiceText ? (
+          <View style={styles.invoiceBox}>
+            <Text style={styles.invoiceText}>{invoiceText}</Text>
+          </View>
+        ) : null}
       </View>
     </ScrollView>
   );
@@ -197,4 +250,17 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   buttonText: { color: "#fff", fontWeight: "700" },
+
+  invoiceBox: {
+    marginTop: 20,
+    padding: 14,
+    backgroundColor: "#eef2ff",
+    borderRadius: 12,
+  },
+  invoiceText: {
+    fontFamily: "monospace",
+    fontSize: 14,
+    color: "#111827",
+    lineHeight: 20,
+  },
 });

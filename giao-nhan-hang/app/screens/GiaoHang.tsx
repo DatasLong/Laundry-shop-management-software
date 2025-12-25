@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Alert,
   StyleSheet,
@@ -37,6 +37,30 @@ export default function GiaoHang() {
   const [orderDocId, setOrderDocId] = useState<string | null>(null);
   const [confirmTotal, setConfirmTotal] = useState("");
 
+  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+
+  // Load danh sách các đơn Chưa giao hàng
+  const loadPendingOrders = async () => {
+    try {
+      const ordersRef = collection(db, "orders");
+      const q = query(ordersRef, where("status", "==", "Chưa giao hàng"));
+      const querySnapshot = await getDocs(q);
+
+      const orders: Order[] = querySnapshot.docs.map((docSnap) => {
+        const data = docSnap.data() as Order;
+        return data;
+      });
+      setPendingOrders(orders);
+    } catch (error: any) {
+      Alert.alert("Lỗi", error.message);
+    }
+  };
+
+  useEffect(() => {
+    // Load lần đầu khi mở màn hình
+    loadPendingOrders();
+  }, []);
+
   // Tìm đơn hàng theo mã
   const handleSearchOrder = async () => {
     if (!code.trim()) {
@@ -58,8 +82,8 @@ export default function GiaoHang() {
       const docSnap = querySnapshot.docs[0];
       const data = docSnap.data() as Order;
 
-      setOrder({ ...data, status: data.status || "Chưa giao" });
-      setOrderDocId(docSnap.id); // Lưu doc id để cập nhật sau
+      setOrder({ ...data, status: data.status || "Chưa giao hàng" });
+      setOrderDocId(docSnap.id);
     } catch (error: any) {
       Alert.alert("Lỗi", error.message);
     }
@@ -82,10 +106,13 @@ export default function GiaoHang() {
       const orderRef = doc(db, "orders", orderDocId);
       await updateDoc(orderRef, { status: "Đã giao hàng" });
 
-      // Cập nhật UI ngay
+      // Cập nhật UI Card 1 ngay
       setOrder({ ...order, status: "Đã giao hàng" });
       setConfirmTotal("");
       Alert.alert("Thành công", "✅ Xác nhận giao hàng thành công!");
+
+      // Load lại Card 2
+      loadPendingOrders();
     } catch (error: any) {
       Alert.alert("Lỗi", error.message);
     }
@@ -150,28 +177,44 @@ export default function GiaoHang() {
         </View>
 
         {/* Xác nhận tổng tiền */}
-        <View style={styles.confirmRow}>
-          <TextInput
-            style={styles.confirmInput}
-            placeholder="Nhập xác nhận tổng tiền"
-            keyboardType="numeric"
-            value={confirmTotal}
-            onChangeText={setConfirmTotal}
-          />
+        {order?.status === "Chưa giao hàng" && (
+          <View style={styles.confirmRow}>
+            <TextInput
+              style={styles.confirmInput}
+              placeholder="Nhập xác nhận tổng tiền"
+              keyboardType="numeric"
+              value={confirmTotal}
+              onChangeText={setConfirmTotal}
+            />
 
-          <TouchableOpacity
-            style={styles.confirmBtn}
-            onPress={handleConfirmDelivery}
-          >
-            <Text style={styles.confirmBtnText}>Xác nhận giao hàng</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={styles.confirmBtn}
+              onPress={handleConfirmDelivery}
+            >
+              <Text style={styles.confirmBtnText}>Xác nhận giao hàng</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* CARD 2 */}
       <View style={[styles.card, { marginTop: 16 }]}>
         <Text style={styles.title}>🧾 Danh sách khách hàng chưa giao hàng</Text>
-        {/* Table 2 sẽ hiển thị sau, giữ nguyên như trước */}
+
+        <View style={styles.table}>
+          {pendingOrders.length === 0 ? (
+            <Text style={{ padding: 10 }}>
+              Không còn đơn hàng nào chưa giao
+            </Text>
+          ) : (
+            pendingOrders.map((o, idx) => (
+              <View key={idx} style={styles.tableRow}>
+                <Text style={styles.tableLabel}>{o.order_id}</Text>
+                <Text style={styles.tableValue}>{o.khachhang_id}</Text>
+              </View>
+            ))
+          )}
+        </View>
       </View>
     </ScrollView>
   );
