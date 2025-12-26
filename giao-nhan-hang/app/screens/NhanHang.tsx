@@ -199,6 +199,11 @@ export default function NhanHang() {
   const createOrder = async () => {
     if (!validateOrder()) return;
 
+    // 🔥 CHỐT TIỀN TRƯỚC KHI RESET
+    const lockedBasePrice = orderItems.reduce((sum, i) => sum + i.subTotal, 0);
+
+    const lockedTotalPrice = lockedBasePrice - lockedBasePrice * (promo / 100);
+
     const orderData = {
       order_id: "ORD-" + Date.now(),
       cusName,
@@ -206,7 +211,11 @@ export default function NhanHang() {
       cusAddress,
       orderItems,
       promotion: promo,
-      totalPrice,
+
+      // ✅ THÊM 2 DÒNG NÀY
+      basePrice: lockedBasePrice,
+      totalPrice: lockedTotalPrice,
+
       creationTime: new Date().toLocaleString("vi-VN"),
       DeliveryTime: "",
     };
@@ -215,7 +224,7 @@ export default function NhanHang() {
 
     setPreviewOrder(orderData);
 
-    // reset all
+    // reset all (GIỮ NGUYÊN)
     setCusName("");
     setCusPhone("");
     setCusAddress("");
@@ -475,18 +484,24 @@ export default function NhanHang() {
               <View style={styles.billTotalRow}>
                 <Text style={styles.billTotalLabel}>Tổng tiền:</Text>
                 <Text style={styles.billTotalValue}>
-                  {basePrice.toLocaleString("vi-VN")} đ
+                  {previewOrder?.basePrice.toLocaleString("vi-VN")} đ
                 </Text>
               </View>
 
               {/* Khuyến mãi */}
-              {promo > 0 && (
+              {previewOrder?.promotion > 0 && (
                 <View style={[styles.billTotalRow, { marginTop: 4 }]}>
                   <Text style={styles.billTotalLabel}>
-                    Khuyến mãi ({promo}%):
+                    Khuyến mãi ({previewOrder?.promotion}%):
                   </Text>
+
                   <Text style={styles.billTotalValue}>
-                    -{(basePrice * (promo / 100)).toLocaleString("vi-VN")} đ
+                    -
+                    {(
+                      previewOrder?.basePrice *
+                      (previewOrder?.promotion / 100)
+                    ).toLocaleString("vi-VN")}{" "}
+                    đ
                   </Text>
                 </View>
               )}
@@ -501,9 +516,9 @@ export default function NhanHang() {
                     { fontSize: 18, color: "red" },
                   ]}
                 >
-                  {(Math.floor(totalPrice / 1000) * 1000).toLocaleString(
-                    "vi-VN"
-                  )}{" "}
+                  {(
+                    Math.floor(previewOrder?.totalPrice / 1000) * 1000
+                  ).toLocaleString("vi-VN")}{" "}
                   đ
                 </Text>
               </View>
