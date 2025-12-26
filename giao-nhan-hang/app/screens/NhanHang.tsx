@@ -7,11 +7,11 @@ import {
   TouchableOpacity,
   View,
   Modal,
+  Image,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { db } from "./firebaseConfig";
 import { addDoc, collection, getDocs, query } from "firebase/firestore";
-import { Image } from "react-native";
 
 /* =======================
    TYPE
@@ -20,6 +20,15 @@ type ProductType = {
   id: string;
   name: string;
   price: number;
+};
+
+type OrderItem = {
+  productId: string;
+  productName: string;
+  price: number;
+  quantity: number;
+  weight: number;
+  subTotal: number;
 };
 
 export default function NhanHang() {
@@ -31,16 +40,25 @@ export default function NhanHang() {
   const [cusAddress, setCusAddress] = useState("");
 
   /* =======================
-     PRODUCT
+     PRODUCT MASTER
   ======================= */
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [selectedProductId, setSelectedProductId] = useState("");
 
   /* =======================
-     ORDER
+     PRODUCT INPUT
   ======================= */
   const [quantity, setQuantity] = useState("");
   const [weight, setWeight] = useState("");
+
+  /* =======================
+     ORDER ITEMS
+  ======================= */
+  const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+
+  /* =======================
+     PROMOTION
+  ======================= */
   const [promotion, setPromotion] = useState("");
 
   /* =======================
@@ -51,6 +69,10 @@ export default function NhanHang() {
   /* =======================
      LOAD PRODUCT TYPE
   ======================= */
+  const removeItem = (index: number) => {
+    setOrderItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
   useEffect(() => {
     const loadProductTypes = async () => {
       const snap = await getDocs(query(collection(db, "ProductType")));
@@ -83,74 +105,87 @@ export default function NhanHang() {
   const selectedProduct = productTypes.find((p) => p.id === selectedProductId);
 
   /* =======================
+     ADD ITEM
+  ======================= */
+  const addItem = () => {
+    if (!selectedProduct) {
+      alert("⚠️ Chọn loại sản phẩm");
+      return;
+    }
+
+    const qty = Number(quantity);
+    const w = Number(weight);
+
+    if (isNaN(qty) || qty <= 0) {
+      alert("⚠️ Số lượng phải > 0");
+      return;
+    }
+
+    if (isNaN(w) || w <= 0) {
+      alert("⚠️ Trọng lượng phải > 0");
+      return;
+    }
+
+    const subTotal = qty * w * selectedProduct.price;
+
+    const newItem: OrderItem = {
+      productId: selectedProduct.id,
+      productName: selectedProduct.name,
+      price: selectedProduct.price,
+      quantity: qty,
+      weight: w,
+      subTotal,
+    };
+
+    setOrderItems((prev) => [...prev, newItem]);
+
+    // reset product input
+    setSelectedProductId("");
+    setQuantity("");
+    setWeight("");
+  };
+
+  /* =======================
      TOTAL PRICE
   ======================= */
-  const basePrice =
-    (Number(quantity) || 0) *
-    (Number(weight) || 0) *
-    (selectedProduct?.price || 0);
+  const basePrice = orderItems.reduce((sum, i) => sum + i.subTotal, 0);
 
-  const totalPrice = basePrice - basePrice * ((Number(promotion) || 0) / 100);
+  const promo = promotion.trim() === "" ? 0 : Number(promotion);
+  const totalPrice = basePrice - basePrice * (promo / 100);
 
-  const validateForm = () => {
-    // ===== REQUIRED TEXT =====
+  /* =======================
+     VALIDATE ORDER
+  ======================= */
+  const validateOrder = () => {
     if (!cusName.trim()) {
-      alert("⚠️ Vui lòng nhập họ tên khách hàng");
+      alert("⚠️ Nhập tên khách hàng");
       return false;
     }
 
     if (!cusPhone.trim()) {
-      alert("⚠️ Vui lòng nhập số điện thoại");
+      alert("⚠️ Nhập số điện thoại");
+      return false;
+    }
+
+    if (!/^[0-9]{10,12}$/.test(cusPhone)) {
+      alert("⚠️ SĐT phải từ 10–12 số");
       return false;
     }
 
     if (!cusAddress.trim()) {
-      alert("⚠️ Vui lòng nhập địa chỉ giao hàng");
+      alert("⚠️ Nhập địa chỉ");
       return false;
     }
 
-    if (!selectedProductId) {
-      alert("⚠️ Vui lòng chọn loại sản phẩm");
+    if (orderItems.length === 0) {
+      alert("⚠️ Chưa có sản phẩm nào");
       return false;
     }
 
-    if (!quantity.trim()) {
-      alert("⚠️ Vui lòng nhập số lượng kiện");
-      return false;
-    }
-
-    if (!weight.trim()) {
-      alert("⚠️ Vui lòng nhập trọng lượng");
-      return false;
-    }
-
-    // ===== PHONE =====
-    const phoneRegex = /^[0-9]{10,12}$/;
-    if (!phoneRegex.test(cusPhone)) {
-      alert("⚠️ Số điện thoại phải là số và từ 10–12 chữ số");
-      return false;
-    }
-
-    // ===== QUANTITY =====
-    const qty = Number(quantity);
-    if (isNaN(qty) || qty <= 0) {
-      alert("⚠️ Số lượng kiện phải là số > 0");
-      return false;
-    }
-
-    // ===== WEIGHT =====
-    const w = Number(weight);
-    if (isNaN(w) || w <= 0) {
-      alert("⚠️ Trọng lượng phải là số > 0");
-      return false;
-    }
-
-    // ===== PROMOTION (OPTIONAL) =====
-    let promo = 0;
     if (promotion.trim() !== "") {
-      promo = Number(promotion);
-      if (isNaN(promo) || promo < 0 || promo > 100) {
-        alert("⚠️ Khuyến mãi phải là số từ 0 đến 100");
+      const p = Number(promotion);
+      if (isNaN(p) || p < 0 || p > 100) {
+        alert("⚠️ Khuyến mãi 0–100%");
         return false;
       }
     }
@@ -162,18 +197,15 @@ export default function NhanHang() {
      CREATE ORDER
   ======================= */
   const createOrder = async () => {
-    if (!validateForm()) return;
+    if (!validateOrder()) return;
 
-    const finalPromotion = promotion.trim() === "" ? 0 : Number(promotion);
     const orderData = {
       order_id: "ORD-" + Date.now(),
       cusName,
       cusPhone,
       cusAddress,
-      productType: selectedProduct,
-      quantity: Number(quantity),
-      weight: Number(weight),
-      promotion: finalPromotion,
+      orderItems,
+      promotion: promo,
       totalPrice,
       creationTime: new Date().toLocaleString("vi-VN"),
       DeliveryTime: "",
@@ -183,13 +215,12 @@ export default function NhanHang() {
 
     setPreviewOrder(orderData);
 
+    // reset all
     setCusName("");
     setCusPhone("");
     setCusAddress("");
-    setQuantity("");
-    setWeight("");
+    setOrderItems([]);
     setPromotion("");
-    setSelectedProductId("");
   };
 
   /* =======================
@@ -201,6 +232,7 @@ export default function NhanHang() {
         <View style={styles.card}>
           <Text style={styles.title}>🧾 Nhập thông tin đơn hàng</Text>
 
+          {/* CUSTOMER */}
           <Text style={styles.sectionTitle}>Thông tin khách hàng</Text>
           <View style={styles.inputDivider} />
 
@@ -212,7 +244,7 @@ export default function NhanHang() {
             onChangeText={setCusName}
             placeholderTextColor="#9ca3af"
           />
-          <Text style={styles.inputLabel}>Số điện thoại*</Text>
+          <Text style={styles.inputLabel}>Số điện thoại *</Text>
           <TextInput
             style={styles.input}
             placeholder="0912345678"
@@ -221,15 +253,16 @@ export default function NhanHang() {
             keyboardType="phone-pad"
             placeholderTextColor="#9ca3af"
           />
-          <Text style={styles.inputLabel}>Địa chỉ giao hàng*</Text>
+          <Text style={styles.inputLabel}>Địa chỉ *</Text>
           <TextInput
             style={styles.input}
-            placeholder="123 Đường ABC, Quận XYZ, TP.HCM"
+            placeholder="123 Đường ABC, Phường XYZ, TP.HCM "
             value={cusAddress}
             onChangeText={setCusAddress}
             placeholderTextColor="#9ca3af"
           />
 
+          {/* PRODUCT */}
           <Text style={styles.sectionTitle}>Thông tin hàng hóa</Text>
           <View style={styles.inputDivider} />
 
@@ -237,31 +270,19 @@ export default function NhanHang() {
           <View style={styles.pickerBox}>
             <Picker
               selectedValue={selectedProductId}
-              onValueChange={(v) => setSelectedProductId(v)}
-              style={{
-                height: 48,
-                color: selectedProductId ? "#111827" : "#9ca3af",
-                backgroundColor: "transparent", // 👈 QUAN TRỌNG
-              }}
-              dropdownIconColor="#9ca3af" // 👈 icon nhạt luôn
+              onValueChange={setSelectedProductId}
+              style={{ height: 48 }}
             >
-              <Picker.Item
-                label="-- Chọn loại sản phẩm --"
-                value=""
-                color="#9ca3af"
-              />
-
+              <Picker.Item label="-- Chọn loại sản phẩm --" value="" />
               {productTypes.map((p) => (
                 <Picker.Item
                   key={p.id}
-                  label={`${p.name} - ${p.price.toLocaleString("vi-VN")} đ/kg`}
+                  label={`${p.name} - ${p.price.toLocaleString()} đ/kg`}
                   value={p.id}
-                  color="#111827"
                 />
               ))}
             </Picker>
           </View>
-
           <Text style={styles.inputLabel}>Số lượng kiện *</Text>
           <TextInput
             style={styles.input}
@@ -280,7 +301,55 @@ export default function NhanHang() {
             keyboardType="numeric"
             placeholderTextColor="#9ca3af"
           />
-          <Text style={styles.inputLabel}>Khuyến mại(%) *</Text>
+
+          <TouchableOpacity style={styles.addBtn} onPress={addItem}>
+            <Text style={{ color: "#fff", fontWeight: "700" }}>➕ Thêm</Text>
+          </TouchableOpacity>
+
+          {/* TABLE */}
+          <View style={styles.tableBox}>
+            {/* HEADER */}
+            <View style={styles.tableHeader}>
+              <Text style={[styles.th, { flex: 2 }]}>Loại sản phẩm</Text>
+              <Text style={[styles.th, { flex: 1, textAlign: "center" }]}>
+                Số lượng
+              </Text>
+              <Text style={[styles.th, { flex: 1, textAlign: "right" }]}>
+                Trọng lượng(Kg)
+              </Text>
+              <Text style={[styles.th, { flex: 0.8, textAlign: "center" }]}>
+                Xóa
+              </Text>
+            </View>
+
+            {/* ROWS */}
+            {orderItems.map((item, index) => (
+              <View key={index} style={styles.tableRow}>
+                <Text style={[styles.td, { flex: 2 }]}>{item.productName}</Text>
+                <Text style={[styles.td, { flex: 1, textAlign: "center" }]}>
+                  {item.quantity}
+                </Text>
+                <Text style={[styles.td, { flex: 1, textAlign: "right" }]}>
+                  {item.weight}
+                </Text>
+                {/* CỘT XÓA */}
+                <TouchableOpacity
+                  style={[
+                    styles.tdWrapper,
+                    { flex: 0.8, alignItems: "center" },
+                  ]}
+                  onPress={() => removeItem(index)}
+                >
+                  <Text style={styles.removeIcon}>−</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+
+          <Text style={styles.sectionTitle}>Thôngtin khuyến mãi</Text>
+          <View style={styles.inputDivider} />
+          {/* PROMO + TOTAL */}
+          <Text style={styles.inputLabel}>Khuyến mãi(%)</Text>
           <TextInput
             style={styles.input}
             placeholder="5"
@@ -298,23 +367,21 @@ export default function NhanHang() {
           </View>
 
           <TouchableOpacity style={styles.button} onPress={createOrder}>
-            <View style={styles.btnContent}>
-              <View style={styles.tickBox}>
-                <Text style={styles.tickText}>✓</Text>
-              </View>
-              <Text style={styles.buttonText}>Tạo hóa đơn</Text>
-            </View>
+            <Text style={{ color: "#fff", fontWeight: "700" }}>
+              Tạo hóa đơn
+            </Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
+      {/* BILL PREVIEW */}
       {/* =======================
-         BILL PREVIEW (FIX SIZE)
-      ======================= */}
+   BILL PREVIEW (FULL – CÓ QR)
+======================= */}
       <Modal visible={!!previewOrder} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.bill}>
-            {/* LOGO PLACEHOLDER */}
+            {/* LOGO & TIÊU ĐỀ */}
             <View style={styles.logoBox}>
               <Image
                 source={require("@/assets/images/Logo.png")}
@@ -332,18 +399,134 @@ export default function NhanHang() {
               Ngày: {previewOrder?.creationTime}
             </Text>
 
-            <View style={styles.divider} />
+            {/* --- PHẦN THÂN HÓA ĐƠN --- */}
+            <View style={{ marginTop: 15 }}>
+              {/* Header 4 cột */}
+              <View style={styles.billTableRow}>
+                <Text style={[styles.billTh, { flex: 0.8 }]}>SL</Text>
+                <Text
+                  style={[styles.billTh, { flex: 1.2, textAlign: "center" }]}
+                >
+                  T.Lượng
+                </Text>
+                <Text
+                  style={[styles.billTh, { flex: 1.5, textAlign: "right" }]}
+                >
+                  Giá bán
+                </Text>
+                <Text
+                  style={[styles.billTh, { flex: 1.5, textAlign: "right" }]}
+                >
+                  T.Tiền
+                </Text>
+              </View>
 
-            <Text style={styles.billTotal}>
-              Thành tiền: {previewOrder?.totalPrice.toLocaleString("vi-VN")} đ
+              <Text style={styles.asciiDivider}>
+                ---------------------------------------------------
+              </Text>
+
+              {previewOrder?.orderItems.map((item: OrderItem, idx: number) => (
+                <View key={idx} style={{ marginBottom: 10 }}>
+                  {/* Dòng 1: Tên sản phẩm */}
+                  <Text
+                    style={[
+                      styles.billTd,
+                      { fontWeight: "700", textTransform: "uppercase" },
+                    ]}
+                  >
+                    {item.productName}
+                  </Text>
+
+                  {/* Dòng 2: 4 thông số */}
+                  <View style={styles.billTableRow}>
+                    <Text style={[styles.billTd, { flex: 0.8 }]}>
+                      {item.quantity}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.billTd,
+                        { flex: 1.2, textAlign: "center" },
+                      ]}
+                    >
+                      {item.weight}kg
+                    </Text>
+                    <Text
+                      style={[styles.billTd, { flex: 1.5, textAlign: "right" }]}
+                    >
+                      {item.price.toLocaleString("vi-VN")}
+                    </Text>
+                    <Text
+                      style={[styles.billTd, { flex: 1.5, textAlign: "right" }]}
+                    >
+                      {item.subTotal.toLocaleString("vi-VN")}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            <Text style={styles.asciiDivider}>
+              ---------------------------------------------------
+            </Text>
+
+            {/* PHẦN TỔNG TIỀN, KHUYẾN MÃI & THANH TOÁN */}
+            <View style={{ marginTop: 5 }}>
+              {/* Tổng cộng chưa giảm giá */}
+              <View style={styles.billTotalRow}>
+                <Text style={styles.billTotalLabel}>Tổng tiền:</Text>
+                <Text style={styles.billTotalValue}>
+                  {basePrice.toLocaleString("vi-VN")} đ
+                </Text>
+              </View>
+
+              {/* Khuyến mãi */}
+              {promo > 0 && (
+                <View style={[styles.billTotalRow, { marginTop: 4 }]}>
+                  <Text style={styles.billTotalLabel}>
+                    Khuyến mãi ({promo}%):
+                  </Text>
+                  <Text style={styles.billTotalValue}>
+                    -{(basePrice * (promo / 100)).toLocaleString("vi-VN")} đ
+                  </Text>
+                </View>
+              )}
+
+              <View style={[styles.billTotalRow, { marginTop: 10 }]}>
+                <Text style={[styles.billTotalLabel, { fontSize: 16 }]}>
+                  THANH TOÁN:
+                </Text>
+                <Text
+                  style={[
+                    styles.billTotalValue,
+                    { fontSize: 18, color: "red" },
+                  ]}
+                >
+                  {(Math.floor(totalPrice / 1000) * 1000).toLocaleString(
+                    "vi-VN"
+                  )}{" "}
+                  đ
+                </Text>
+              </View>
+              <Text
+                style={{
+                  textAlign: "right",
+                  fontSize: 11,
+                  fontStyle: "italic",
+                }}
+              >
+                (Đã làm tròn)
+              </Text>
+            </View>
+
+            <Text style={styles.asciiDivider}>
+              ---------------------------------------------------
             </Text>
 
             <Text style={styles.billFooter}>
-              Chân thành cảm ơn khách hàng đã tin tưởng và ủng hộ{"\n"}
-              Tích lũy 10 tem giặt 5kg cho lần giặt tiếp theo
+              Chân thành cảm ơn quý khách{"\n"}
+              Hẹn gặp lại lần sau
             </Text>
 
-            {/* QR PLACEHOLDER */}
             <View style={styles.qrBox}>
               <Image
                 source={require("@/assets/images/QR_test.png")}
@@ -370,17 +553,10 @@ export default function NhanHang() {
 ======================= */
 const styles = StyleSheet.create({
   wrapper: { padding: 12 },
-  card: {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 14,
-  },
-  title: {
-    textAlign: "center",
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 10,
-  },
+  card: { backgroundColor: "#fff", padding: 16, borderRadius: 14 },
+  title: { fontSize: 18, fontWeight: "700", textAlign: "center" },
+  sectionTitle: { marginTop: 12, fontWeight: "800", color: "#4f46e5" },
+  inputDivider: { height: 1, backgroundColor: "#e5e7eb", marginVertical: 6 },
   input: {
     borderWidth: 1,
     borderColor: "#d1d5db",
@@ -390,14 +566,23 @@ const styles = StyleSheet.create({
   },
   pickerBox: {
     borderWidth: 1,
-    borderColor: "#d1d5db", // 👈 placeholder color
+    borderColor: "#d1d5db",
     borderRadius: 10,
-    height: 48,
-    justifyContent: "center",
     marginBottom: 10,
-    backgroundColor: "#fff", // 👈 CHỐT HẠ
   },
-
+  addBtn: {
+    backgroundColor: "#22c55e",
+    padding: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  row: {
+    flexDirection: "row",
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderColor: "#e5e7eb",
+  },
   totalBox: {
     backgroundColor: "#eef2ff",
     padding: 12,
@@ -405,73 +590,124 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
   },
-  totalValue: {
-    fontWeight: "800",
-    color: "#4338ca",
-  },
+  totalValue: { fontWeight: "800", color: "#4338ca" },
   button: {
     backgroundColor: "#4f46e5",
     padding: 14,
     borderRadius: 12,
-    marginTop: 12,
     alignItems: "center",
+    marginTop: 12,
   },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
-
-  /* ===== BILL ===== */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "center",
     alignItems: "center",
   },
-  bill: {
-    width: 240,
-    backgroundColor: "white",
-    paddingVertical: 20, // 👈 tăng chiều cao bill
-    paddingHorizontal: 14,
-    borderRadius: 10,
+  // bill: { width: 240, backgroundColor: "#fff", padding: 14, borderRadius: 10 },
+  // billTotal: { marginTop: 10, fontWeight: "900" },
+  logo: { width: 120, height: 40, alignSelf: "center", marginBottom: 8 },
+  tableBox: {
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 8,
+    overflow: "hidden", // 👈 bo góc ăn cả header
+    marginBottom: 12,
   },
 
+  tableHeader: {
+    flexDirection: "row",
+    backgroundColor: "#f3f4f6", // 👈 xám nhạt
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderBottomWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+
+  tableRow: {
+    flexDirection: "row",
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderBottomWidth: 1,
+    borderColor: "#f1f5f9",
+  },
+
+  th: {
+    fontWeight: "700",
+    fontSize: 13,
+    color: "#374151",
+  },
+
+  td: {
+    fontSize: 13,
+    color: "#111827",
+  },
+  inputLabel: {
+    fontWeight: "600",
+    marginBottom: 4,
+    color: "#111827",
+  },
+  removeIcon: {
+    color: "#dc2626", // đỏ nhẹ
+    fontSize: 18,
+    fontWeight: "900",
+  },
+  tdWrapper: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
   logoBox: {
     height: 40,
     justifyContent: "center",
     alignItems: "center",
   },
+
+  bill: {
+    width: 280,
+    backgroundColor: "white",
+    paddingVertical: 20,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+  },
+
   billTitle: {
     fontSize: 22,
     fontWeight: "900",
     color: "red",
     textAlign: "center",
   },
+
   billSub: {
     textAlign: "center",
     fontWeight: "700",
     marginBottom: 6,
   },
+
   billText: {
-    fontSize: 14,
+    fontSize: 13,
     marginVertical: 2,
   },
+
   divider: {
     height: 1,
     backgroundColor: "#000",
     marginVertical: 6,
   },
+
   billTotal: {
     fontSize: 16,
     fontWeight: "900",
     marginVertical: 6,
   },
+
   billFooter: {
     fontSize: 12,
     marginTop: 6,
+    textAlign: "center",
   },
+
   qrBox: {
-    height: 160, // 👈 đủ chứa QR 150x150
+    height: 160,
     width: 160,
     marginTop: 12,
     justifyContent: "center",
@@ -481,6 +717,11 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
 
+  qrImage: {
+    width: 150,
+    height: 150,
+  },
+
   closeBtn: {
     backgroundColor: "#dc2626",
     padding: 10,
@@ -488,52 +729,47 @@ const styles = StyleSheet.create({
     marginTop: 10,
     alignItems: "center",
   },
-  inputLabel: {
-    fontWeight: "600",
+  billTableHeader: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderColor: "#000",
+    paddingBottom: 4,
     marginBottom: 4,
-    color: "#111827",
   },
 
-  inputDivider: {
-    height: 1,
-    backgroundColor: "#e5e7eb",
-    marginBottom: 10,
-  },
-  sectionTitle: {
-    fontWeight: "800",
+  billTotalLabel: {
     fontSize: 14,
-    color: "#4f46e5", // giống button
-    marginBottom: 6,
-    marginTop: 12,
+    fontWeight: "900",
   },
-  btnContent: {
+
+  billTotalValue: {
+    fontSize: 14,
+    fontWeight: "900",
+  },
+  asciiDivider: {
+    fontSize: 10,
+    color: "#000",
+    letterSpacing: 1, // Tạo khoảng cách cho các dấu gạch thẳng hơn
+    marginVertical: 4,
+    textAlign: "center",
+  },
+  billTableRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
   },
-
-  tickBox: {
-    width: 14,
-    height: 14,
-    backgroundColor: "#22c55e", // xanh lá
-    borderRadius: 2,
-    justifyContent: "center",
-    alignItems: "center",
+  billTd: {
+    fontSize: 13,
+    color: "#000",
+    lineHeight: 18,
   },
-
-  tickText: {
-    color: "#fff",
-    fontWeight: "900",
+  billTh: {
     fontSize: 12,
+    fontWeight: "800",
+    color: "#000",
   },
-  logo: {
-    width: 120,
-    height: 40,
-  },
-  qrImage: {
-    width: 160,
-    height: 160,
-    resizeMode: "contain",
-    alignSelf: "center",
+  billTotalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
 });
