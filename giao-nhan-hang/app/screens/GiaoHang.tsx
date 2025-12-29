@@ -20,31 +20,66 @@ import {
 
 type Order = {
   order_id: string;
-
   cusName: string;
-
   cusPhone: string;
   cusAddress: string;
 
   basePrice: number;
   totalPrice: number;
+  totalPriceUpdate: number;
 
-  Status: "Chưa xong" | "Đã xong";
+  promotion: number;
+
   Delivery: "Chưa giao hàng" | "Đã giao hàng";
-
   creationTime: string;
   DeliveryTime: string;
+};
+
+type Product = {
+  id: string;
+  Product_ID: string;
+  ProductName: string;
+  quantity: number;
+  price: number;
+
+  weight: number;
+  weightUpdate: number;
+
+  subTotal: number;
+  subTotalUpdate: number;
+
+  status: "Chưa xong" | "Đã xong";
+  timeDone: string;
 };
 
 export default function GiaoHang() {
   const [code, setCode] = useState("");
 
+  const [productsMap, setProductsMap] = useState<{
+    [orderDocId: string]: Product[];
+  }>({});
+
+  const [weightInputs, setWeightInputs] = useState<{
+    [productDocId: string]: string;
+  }>({});
+
+  const loadProducts = async (orderDocId: string) => {
+    const snap = await getDocs(collection(db, "Order", orderDocId, "Products"));
+
+    const list = snap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as Product),
+    }));
+
+    setProductsMap((prev) => ({ ...prev, [orderDocId]: list }));
+  };
+
   // Card 1
   const [orders, setOrders] = useState<Order[]>([]);
   const [orderDocIds, setOrderDocIds] = useState<string[]>([]);
-  const [confirmTotals, setConfirmTotals] = useState<{ [key: number]: string }>(
-    {}
-  );
+  // const [confirmTotals, setConfirmTotals] = useState<{ [key: number]: string }>(
+  //   {}
+  // );
 
   // Card 2
   const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
@@ -85,13 +120,8 @@ export default function GiaoHang() {
       const keyword = code.trim();
       let q;
 
-      // 🔍 theo trạng thái GIẶT
-      if (keyword === "Chưa xong" || keyword === "Đã xong") {
-        q = query(collection(db, "Order"), where("Status", "==", keyword));
-      }
-
       // 🔍 theo trạng thái GIAO
-      else if (keyword === "Chưa giao hàng" || keyword === "Đã giao hàng") {
+      if (keyword === "Chưa giao hàng" || keyword === "Đã giao hàng") {
         q = query(collection(db, "Order"), where("Delivery", "==", keyword));
       }
 
@@ -129,50 +159,133 @@ export default function GiaoHang() {
 
       setOrders(list);
       setOrderDocIds(ids);
-      setConfirmTotals({});
+      // setConfirmTotals({});
+      // ✅ LOAD PRODUCT SAU KHI SEARCH
+      ids.forEach((id) => loadProducts(id));
     } catch (error: any) {
       Alert.alert("Lỗi", error.message);
     }
+  };
+
+  const handleDoneProduct = async (
+    orderDocId: string,
+    productDocId: string
+  ) => {
+    await updateDoc(doc(db, "Order", orderDocId, "Products", productDocId), {
+      status: "Đã xong",
+      timeDone: new Date().toLocaleString("vi-VN"),
+    });
+
+    loadProducts(orderDocId);
+  };
+  const handleUpdateWeight = async (orderDocId: string, product: Product) => {
+    const newWeight = Number(weightInputs[product.id]);
+    if (isNaN(newWeight)) return;
+
+    const subTotalUpdate = newWeight * product.quantity * product.price;
+
+    await updateDoc(doc(db, "Order", orderDocId, "Products", product.id), {
+      weightUpdate: newWeight,
+      subTotalUpdate,
+    });
+
+    loadProducts(orderDocId);
+  };
+  const updateOrderTotal = async (orderDocId: string) => {
+    const products = productsMap[orderDocId];
+    if (!products) return;
+
+    const order = orders.find((_, i) => orderDocIds[i] === orderDocId);
+    if (!order) return;
+
+    const sum = products.reduce((s, p) => {
+      // ✅ nếu đã update kg → lấy subTotalUpdate
+      if (p.weightUpdate !== p.weight) {
+        return s + p.subTotalUpdate;
+      }
+
+      // ❌ chưa update → dùng tiền ban đầu
+      return s + p.subTotal;
+    }, 0);
+
+    const totalPriceUpdate = sum - sum * (order.promotion / 100);
+
+    await updateDoc(doc(db, "Order", orderDocId), {
+      totalPriceUpdate,
+    });
+  };
+
+  const handleDeliveryOrder = async (orderDocId: string) => {
+    const products = productsMap[orderDocId];
+    if (!products) return;
+
+    const allDone = products.every((p) => p.status === "Đã xong");
+    if (!allDone) {
+      Alert.alert("Chưa thể giao", "Còn sản phẩm chưa giặt xong");
+      return;
+    }
+
+    const deliveryTime = new Date().toLocaleString("vi-VN");
+
+    await updateDoc(doc(db, "Order", orderDocId), {
+      Delivery: "Đã giao hàng",
+      DeliveryTime: deliveryTime,
+    });
+
+    // ✅ CHỈ UPDATE CARD 1 – KHÔNG ĐỤNG CARD 2
+    setOrders((prev) =>
+      prev.map((o, i) =>
+        orderDocIds[i] === orderDocId
+          ? {
+              ...o,
+              Delivery: "Đã giao hàng",
+              DeliveryTime: deliveryTime,
+            }
+          : o
+      )
+    );
+
+    Alert.alert("Thành công", "Đã giao hàng");
   };
 
   // 🚚 Xác nhận giao hàng theo từng đơn
-  const handleConfirmDelivery = async (index: number) => {
-    const order = orders[index];
-    const docId = orderDocIds[index];
-    const inputTotal = Number(confirmTotals[index]);
+  // const handleConfirmDelivery = async (index: number) => {
+  //   const order = orders[index];
+  //   const docId = orderDocIds[index];
+  //   const inputTotal = Number(confirmTotals[index]);
 
-    if (!docId) {
-      Alert.alert("Lỗi", "Không xác định được đơn hàng!");
-      return;
-    }
+  //   if (!docId) {
+  //     Alert.alert("Lỗi", "Không xác định được đơn hàng!");
+  //     return;
+  //   }
 
-    if (isNaN(inputTotal) || inputTotal !== order.totalPrice) {
-      Alert.alert("Lỗi", "Tổng tiền nhập không đúng!");
-      return;
-    }
+  //   if (isNaN(inputTotal) || inputTotal !== order.totalPrice) {
+  //     Alert.alert("Lỗi", "Tổng tiền nhập không đúng!");
+  //     return;
+  //   }
 
-    try {
-      await updateDoc(doc(db, "Order", docId), {
-        Delivery: "Đã giao hàng",
-        DeliveryTime: new Date().toLocaleString("vi-VN"),
-      });
+  //   try {
+  //     await updateDoc(doc(db, "Order", docId), {
+  //       Delivery: "Đã giao hàng",
+  //       DeliveryTime: new Date().toLocaleString("vi-VN"),
+  //     });
 
-      Alert.alert("Thành công", "✅ Đã xác nhận giao hàng");
+  //     Alert.alert("Thành công", "✅ Đã xác nhận giao hàng");
 
-      // update UI tại chỗ
-      const newOrders = [...orders];
-      newOrders[index] = {
-        ...order,
-        Delivery: "Đã giao hàng",
-        DeliveryTime: new Date().toLocaleString("vi-VN"),
-      };
-      setOrders(newOrders);
+  //     // update UI tại chỗ
+  //     const newOrders = [...orders];
+  //     newOrders[index] = {
+  //       ...order,
+  //       Delivery: "Đã giao hàng",
+  //       DeliveryTime: new Date().toLocaleString("vi-VN"),
+  //     };
+  //     setOrders(newOrders);
 
-      loadPendingOrders();
-    } catch (error: any) {
-      Alert.alert("Lỗi", error.message);
-    }
-  };
+  //     loadPendingOrders();
+  //   } catch (error: any) {
+  //     Alert.alert("Lỗi", error.message);
+  //   }
+  // };
 
   return (
     <View style={{ flex: 1 }}>
@@ -222,8 +335,18 @@ export default function GiaoHang() {
                   ["Khách hàng", order.cusName],
                   ["Số điện thoại", order.cusPhone],
                   ["Địa chỉ", order.cusAddress],
-                  ["Tổng tiền", order.totalPrice.toString()],
-                  ["Trạng thái giặt", order.Status],
+
+                  // ✅ tổng ban đầu
+                  ["Tổng tiền ban đầu", order.totalPrice.toString()],
+
+                  // ✅ tổng sau cập nhật (nếu có)
+                  [
+                    "Tổng tiền sau cập nhật",
+                    order.totalPriceUpdate
+                      ? order.totalPriceUpdate.toString()
+                      : "Chưa cập nhật",
+                  ],
+
                   ["Trạng thái giao", order.Delivery],
                   ["Nhận lúc", order.creationTime],
                   ["Giao lúc", order.DeliveryTime || "Chưa giao"],
@@ -233,6 +356,10 @@ export default function GiaoHang() {
                     <Text
                       style={[
                         styles.tableValue,
+                        label === "Tổng tiền sau cập nhật" &&
+                        value !== "Chưa cập nhật"
+                          ? { color: "#dc2626", fontWeight: "700" }
+                          : {},
                         label === "Trạng thái giao" && value === "Đã giao hàng"
                           ? { color: "#16a34a", fontWeight: "700" }
                           : {},
@@ -244,26 +371,71 @@ export default function GiaoHang() {
                 ))}
               </View>
 
-              {order.Delivery === "Chưa giao hàng" && (
-                <View style={styles.confirmRow}>
-                  <TextInput
-                    style={styles.confirmInput}
-                    placeholder="Nhập xác nhận tổng tiền"
-                    keyboardType="numeric"
-                    value={confirmTotals[idx] || ""}
-                    onChangeText={(text) =>
-                      setConfirmTotals((prev) => ({ ...prev, [idx]: text }))
-                    }
-                  />
-                  <TouchableOpacity
-                    style={styles.confirmBtn}
-                    onPress={() => handleConfirmDelivery(idx)}
-                  >
-                    <Text style={styles.confirmBtnText}>
-                      Xác nhận giao hàng
-                    </Text>
-                  </TouchableOpacity>
+              {productsMap[orderDocIds[idx]]?.map((p, pIdx) => (
+                <View key={p.id} style={{ marginTop: 16 }}>
+                  <Text style={{ fontWeight: "700", marginBottom: 6 }}>
+                    🧺 Product {pIdx + 1}
+                  </Text>
+
+                  <View style={styles.table}>
+                    {[
+                      ["Product ID", p.Product_ID],
+                      ["Tên SP", p.ProductName],
+                      ["Số lượng", p.quantity],
+                      ["Giá", p.price],
+                      ["TL ban đầu", p.weight],
+                      ["TL mới", p.weightUpdate],
+                      ["Tạm tính", p.subTotal],
+                      ["Cập nhật", p.subTotalUpdate],
+                      ["Trạng thái", p.status],
+                      ["Giặt xong", p.timeDone || "Chưa xong"],
+                    ].map(([l, v], i) => (
+                      <View key={i} style={styles.tableRow}>
+                        <Text style={styles.tableLabel}>{l}</Text>
+                        <Text style={styles.tableValue}>{v}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {p.status === "Chưa xong" ? (
+                    <TouchableOpacity
+                      style={[styles.confirmBtn, { marginTop: 8 }]}
+                      onPress={() => handleDoneProduct(orderDocIds[idx], p.id)}
+                    >
+                      <Text style={styles.confirmBtnText}>Đã xong</Text>
+                    </TouchableOpacity>
+                  ) : p.weightUpdate == null ? (
+                    <View style={styles.confirmRow}>
+                      <TextInput
+                        style={styles.confirmInput}
+                        placeholder="Nhập trọng lượng mới"
+                        keyboardType="numeric"
+                        value={weightInputs[p.id] || ""}
+                        onChangeText={(t) =>
+                          setWeightInputs((prev) => ({ ...prev, [p.id]: t }))
+                        }
+                      />
+                      <TouchableOpacity
+                        style={styles.greenBtn}
+                        onPress={() => {
+                          handleUpdateWeight(orderDocIds[idx], p);
+                          updateOrderTotal(orderDocIds[idx]);
+                        }}
+                      >
+                        <Text style={styles.greenText}>Update</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
                 </View>
+              ))}
+
+              {order.Delivery === "Chưa giao hàng" && (
+                <TouchableOpacity
+                  style={[styles.confirmBtn, { marginTop: 16 }]}
+                  onPress={() => handleDeliveryOrder(orderDocIds[idx])}
+                >
+                  <Text style={styles.confirmBtnText}>🚚 Giao hàng</Text>
+                </TouchableOpacity>
               )}
             </View>
           ))}

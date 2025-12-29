@@ -29,6 +29,12 @@ type OrderItem = {
   quantity: number;
   weight: number;
   subTotal: number;
+
+  // NEW
+  weightUpdate?: number;
+  subTotalUpdate?: number;
+  status: "Chưa xong" | "Đã xong";
+  timeDone: string;
 };
 
 export default function NhanHang() {
@@ -135,6 +141,12 @@ export default function NhanHang() {
       quantity: qty,
       weight: w,
       subTotal,
+
+      // NEW
+      // weightUpdate: w,
+      // subTotalUpdate: subTotal,
+      status: "Chưa xong",
+      timeDone: "",
     };
 
     setOrderItems((prev) => [...prev, newItem]);
@@ -196,39 +208,55 @@ export default function NhanHang() {
   /* =======================
      CREATE ORDER
   ======================= */
+  /* =======================
+   CREATE ORDER (ĐÃ SỬA)
+======================= */
   const createOrder = async () => {
     if (!validateOrder()) return;
 
-    // 🔥 CHỐT TIỀN TRƯỚC KHI RESET
-    const lockedBasePrice = orderItems.reduce((sum, i) => sum + i.subTotal, 0);
-
+    const lockedBasePrice = orderItems.reduce((s, i) => s + i.subTotal, 0);
     const lockedTotalPrice = lockedBasePrice - lockedBasePrice * (promo / 100);
+    const creationTime = new Date().toLocaleString("vi-VN");
 
+    // Tạo object dữ liệu sạch để dùng cho cả Firebase và Modal
     const orderData = {
       order_id: "ORD-" + Date.now(),
       cusName,
       cusPhone,
       cusAddress,
-      orderItems,
       promotion: promo,
-
-      // ✅ THÊM 2 DÒNG NÀY
       basePrice: lockedBasePrice,
       totalPrice: lockedTotalPrice,
-
-      creationTime: new Date().toLocaleString("vi-VN"),
+      totalPriceUpdate: lockedTotalPrice,
+      creationTime: creationTime,
+      Delivery: "Chưa giao hàng",
       DeliveryTime: "",
-
-      Status: "Chưa xong", // chưa giặt xong
-      Delivery: "Chưa giao hàng", // chưa giao
-      cusName_lower: cusName.toLowerCase(),
     };
 
-    await addDoc(collection(db, "Order"), orderData);
+    // 1️⃣ Lưu vào Firebase
+    const orderRef = await addDoc(collection(db, "Order"), orderData);
 
-    setPreviewOrder(orderData);
+    // 2️⃣ Lưu Products subcollection
+    for (const item of orderItems) {
+      await addDoc(collection(db, "Order", orderRef.id, "Products"), {
+        Product_ID: item.productId,
+        ProductName: item.productName,
+        quantity: item.quantity,
+        price: item.price,
+        weight: item.weight,
+        subTotal: item.subTotal,
+        status: item.status,
+        timeDone: item.timeDone,
+      });
+    }
 
-    // reset all (GIỮ NGUYÊN)
+    // 3️⃣ CẬP NHẬT STATE PREVIEW (Dùng dữ liệu từ orderData)
+    setPreviewOrder({
+      ...orderData, // Lấy toàn bộ cusName, cusPhone, creationTime ở đây
+      orderItems, // Danh sách món đồ để hiện trong bảng
+    });
+
+    // Reset các ô nhập liệu
     setCusName("");
     setCusPhone("");
     setCusAddress("");
@@ -249,27 +277,36 @@ export default function NhanHang() {
           <Text style={styles.sectionTitle}>Thông tin khách hàng</Text>
           <View style={styles.inputDivider} />
 
-          <Text style={styles.inputLabel}>Họ và tên *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Nguyễn Văn A"
-            value={cusName}
-            onChangeText={setCusName}
-            placeholderTextColor="#9ca3af"
-          />
-          <Text style={styles.inputLabel}>Số điện thoại *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="0912345678"
-            value={cusPhone}
-            onChangeText={setCusPhone}
-            keyboardType="phone-pad"
-            placeholderTextColor="#9ca3af"
-          />
+          {/* Dòng chứa Họ tên và SĐT */}
+          <View style={styles.rowContainer}>
+            <View style={styles.flex1}>
+              <Text style={styles.inputLabel}>Họ và tên *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Nguyễn Văn A"
+                value={cusName}
+                onChangeText={setCusName}
+                placeholderTextColor="#9ca3af"
+              />
+            </View>
+            <View style={{ width: 12 }} /> {/* Khoảng cách giữa 2 ô */}
+            <View style={styles.flex1}>
+              <Text style={styles.inputLabel}>Số điện thoại *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="0912345678"
+                value={cusPhone}
+                onChangeText={setCusPhone}
+                keyboardType="phone-pad"
+                placeholderTextColor="#9ca3af"
+              />
+            </View>
+          </View>
+
           <Text style={styles.inputLabel}>Địa chỉ *</Text>
           <TextInput
             style={styles.input}
-            placeholder="123 Đường ABC, Phường XYZ, TP.HCM "
+            placeholder="123 Đường ABC, Phường XYZ, TP.HCM"
             value={cusAddress}
             onChangeText={setCusAddress}
             placeholderTextColor="#9ca3af"
@@ -409,7 +446,7 @@ export default function NhanHang() {
             <Text style={styles.billText}>Tên KH: {previewOrder?.cusName}</Text>
             <Text style={styles.billText}>SĐT: {previewOrder?.cusPhone}</Text>
             <Text style={styles.billText}>
-              Ngày: {previewOrder?.creationTime}
+              Ngày tạo: {previewOrder?.creationTime}
             </Text>
 
             {/* --- PHẦN THÂN HÓA ĐƠN --- */}
@@ -542,8 +579,8 @@ export default function NhanHang() {
             </Text>
 
             <Text style={styles.billFooter}>
-              Chân thành cảm ơn quý khách{"\n"}
-              Hẹn gặp lại lần sau
+              Chân thành cảm ơn quý khách đã tin tưởng và ủng hộ{"\n"}
+              Tích lũy 10 tem giặt 5kg cho lần giặt tiếp theo
             </Text>
 
             <View style={styles.qrBox}>
@@ -576,13 +613,13 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: "700", textAlign: "center" },
   sectionTitle: { marginTop: 12, fontWeight: "800", color: "#4f46e5" },
   inputDivider: { height: 1, backgroundColor: "#e5e7eb", marginVertical: 6 },
-  input: {
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 10,
-  },
+  // input: {
+  //   borderWidth: 1,
+  //   borderColor: "#d1d5db",
+  //   borderRadius: 10,
+  //   padding: 12,
+  //   marginBottom: 10,
+  // },
   pickerBox: {
     borderWidth: 1,
     borderColor: "#d1d5db",
@@ -722,7 +759,7 @@ const styles = StyleSheet.create({
   billFooter: {
     fontSize: 12,
     marginTop: 6,
-    textAlign: "center",
+    textAlign: "left",
   },
 
   qrBox: {
@@ -790,5 +827,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  rowContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  flex1: {
+    flex: 1,
+  },
+
+  // Lưu ý: Đảm bảo style .input của bạn không có width cố định (ví dụ width: '100%')
+  // để nó tự co giãn theo View bao ngoài.
+  input: {
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    // width: '100%', // Đảm bảo nếu có dòng này thì flex: 1 ở trên sẽ quản lý nó
   },
 });
