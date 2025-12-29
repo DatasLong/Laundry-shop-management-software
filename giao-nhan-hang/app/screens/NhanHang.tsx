@@ -218,6 +218,10 @@ export default function NhanHang() {
 
       creationTime: new Date().toLocaleString("vi-VN"),
       DeliveryTime: "",
+
+      Status: "Chưa xong", // chưa giặt xong
+      Delivery: "Chưa giao hàng", // chưa giao
+      cusName_lower: cusName.toLowerCase(),
     };
 
     await addDoc(collection(db, "Order"), orderData);

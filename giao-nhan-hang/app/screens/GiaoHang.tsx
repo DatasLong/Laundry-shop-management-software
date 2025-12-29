@@ -19,16 +19,21 @@ import {
 } from "firebase/firestore";
 
 type Order = {
-  khachhang_id: string;
   order_id: string;
-  phone: string;
-  address: string;
-  product: string;
-  quantity: number;
-  weight: number;
-  price: number;
-  total: number;
-  status: string;
+
+  cusName: string;
+
+  cusPhone: string;
+  cusAddress: string;
+
+  basePrice: number;
+  totalPrice: number;
+
+  Status: "Chưa xong" | "Đã xong";
+  Delivery: "Chưa giao hàng" | "Đã giao hàng";
+
+  creationTime: string;
+  DeliveryTime: string;
 };
 
 export default function GiaoHang() {
@@ -48,8 +53,8 @@ export default function GiaoHang() {
   const loadPendingOrders = async () => {
     try {
       const q = query(
-        collection(db, "orders"),
-        where("status", "==", "Chưa giao hàng")
+        collection(db, "Order"),
+        where("Delivery", "==", "Chưa giao hàng")
       );
       const snapshot = await getDocs(q);
       const list: Order[] = snapshot.docs.map(
@@ -65,10 +70,14 @@ export default function GiaoHang() {
     loadPendingOrders();
   }, []);
 
+  const handleNameTyping = (text: string) => {
+    setCode(text);
+  };
+
   // 🔍 Tìm kiếm (mã / ngày / trạng thái)
   const handleSearchOrder = async () => {
     if (!code.trim()) {
-      Alert.alert("Lỗi", "Nhập mã / ngày / trạng thái");
+      Alert.alert("Lỗi", "Nhập mã / tên / SĐT / trạng thái");
       return;
     }
 
@@ -76,18 +85,29 @@ export default function GiaoHang() {
       const keyword = code.trim();
       let q;
 
-      if (/^\d{4}-\d{2}-\d{2}$/.test(keyword)) {
-        // tìm theo ngày
-        q = query(
-          collection(db, "orders"),
-          where("createdDate", "==", keyword)
-        );
-      } else if (keyword === "Chưa giao hàng" || keyword === "Đã giao hàng") {
-        // tìm theo trạng thái
-        q = query(collection(db, "orders"), where("status", "==", keyword));
-      } else {
-        // tìm theo mã đơn
-        q = query(collection(db, "orders"), where("order_id", "==", keyword));
+      // 🔍 theo trạng thái GIẶT
+      if (keyword === "Chưa xong" || keyword === "Đã xong") {
+        q = query(collection(db, "Order"), where("Status", "==", keyword));
+      }
+
+      // 🔍 theo trạng thái GIAO
+      else if (keyword === "Chưa giao hàng" || keyword === "Đã giao hàng") {
+        q = query(collection(db, "Order"), where("Delivery", "==", keyword));
+      }
+
+      // 🔍 theo SĐT
+      else if (/^\d{10,12}$/.test(keyword)) {
+        q = query(collection(db, "Order"), where("cusPhone", "==", keyword));
+      }
+
+      // 🔍 theo mã đơn
+      else if (keyword.startsWith("ORD-")) {
+        q = query(collection(db, "Order"), where("order_id", "==", keyword));
+      }
+
+      // 🔍 theo TÊN KHÁCH
+      else {
+        q = query(collection(db, "Order"), where("cusName", "==", keyword));
       }
 
       const snapshot = await getDocs(q);
@@ -126,21 +146,26 @@ export default function GiaoHang() {
       return;
     }
 
-    if (isNaN(inputTotal) || inputTotal !== order.total) {
+    if (isNaN(inputTotal) || inputTotal !== order.totalPrice) {
       Alert.alert("Lỗi", "Tổng tiền nhập không đúng!");
       return;
     }
 
     try {
-      await updateDoc(doc(db, "orders", docId), {
-        status: "Đã giao hàng",
+      await updateDoc(doc(db, "Order", docId), {
+        Delivery: "Đã giao hàng",
+        DeliveryTime: new Date().toLocaleString("vi-VN"),
       });
 
       Alert.alert("Thành công", "✅ Đã xác nhận giao hàng");
 
       // update UI tại chỗ
       const newOrders = [...orders];
-      newOrders[index] = { ...order, status: "Đã giao hàng" };
+      newOrders[index] = {
+        ...order,
+        Delivery: "Đã giao hàng",
+        DeliveryTime: new Date().toLocaleString("vi-VN"),
+      };
       setOrders(newOrders);
 
       loadPendingOrders();
@@ -150,113 +175,122 @@ export default function GiaoHang() {
   };
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ paddingBottom: 30 }}
-      keyboardShouldPersistTaps="handled"
-    >
-      {/* CARD 1 */}
-      <View style={styles.card}>
-        <Text style={styles.title}>📱 Quét Mã QR / RFID Giao Hàng</Text>
+    <View style={{ flex: 1 }}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={{ paddingBottom: 40 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* CARD 1 */}
+        <View style={styles.card}>
+          <Text style={styles.title}>📱 Quét Mã QR / RFID Giao Hàng</Text>
 
-        <TouchableOpacity style={styles.scanBtn}>
-          <Text style={styles.scanText}>📷 Bật Camera Quét QR</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.or}>
-          Nhập mã đơn / ngày (yyyy-mm-dd) / trạng thái
-        </Text>
-
-        <View style={styles.row}>
-          <TextInput
-            style={styles.input}
-            placeholder="VD: ORD-xxx | 2025-12-25 | Chưa giao hàng"
-            value={code}
-            onChangeText={setCode}
-          />
-          <TouchableOpacity style={styles.greenBtn} onPress={handleSearchOrder}>
-            <Text style={styles.greenText}>Tìm</Text>
+          <TouchableOpacity style={styles.scanBtn}>
+            <Text style={styles.scanText}>📷 Bật Camera Quét QR</Text>
           </TouchableOpacity>
+
+          <Text style={styles.or}>Hoặc nhập mã đơn hàng thủ công</Text>
+
+          <View>
+            <View style={styles.searchRow}>
+              <TextInput
+                style={styles.input}
+                placeholder="Nhập mã đơn hàng/ Tên / SĐT / Đã xong|Chưa xong / Đã giao hàng|Chưa giao hàng"
+                value={code}
+                onChangeText={handleNameTyping}
+              />
+
+              <TouchableOpacity
+                style={styles.greenBtn}
+                onPress={handleSearchOrder}
+              >
+                <Text style={styles.greenText}>Tìm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* DANH SÁCH ĐƠN */}
+          {orders.map((order, idx) => (
+            <View key={idx} style={{ marginTop: 20 }}>
+              <Text style={{ fontWeight: "700", marginBottom: 6 }}>
+                📦 Đơn hàng {idx + 1}
+              </Text>
+
+              <View style={styles.table}>
+                {[
+                  ["Mã đơn hàng", order.order_id],
+                  ["Khách hàng", order.cusName],
+                  ["Số điện thoại", order.cusPhone],
+                  ["Địa chỉ", order.cusAddress],
+                  ["Tổng tiền", order.totalPrice.toString()],
+                  ["Trạng thái giặt", order.Status],
+                  ["Trạng thái giao", order.Delivery],
+                  ["Nhận lúc", order.creationTime],
+                  ["Giao lúc", order.DeliveryTime || "Chưa giao"],
+                ].map(([label, value], i) => (
+                  <View key={i} style={styles.tableRow}>
+                    <Text style={styles.tableLabel}>{label}</Text>
+                    <Text
+                      style={[
+                        styles.tableValue,
+                        label === "Trạng thái giao" && value === "Đã giao hàng"
+                          ? { color: "#16a34a", fontWeight: "700" }
+                          : {},
+                      ]}
+                    >
+                      {value}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              {order.Delivery === "Chưa giao hàng" && (
+                <View style={styles.confirmRow}>
+                  <TextInput
+                    style={styles.confirmInput}
+                    placeholder="Nhập xác nhận tổng tiền"
+                    keyboardType="numeric"
+                    value={confirmTotals[idx] || ""}
+                    onChangeText={(text) =>
+                      setConfirmTotals((prev) => ({ ...prev, [idx]: text }))
+                    }
+                  />
+                  <TouchableOpacity
+                    style={styles.confirmBtn}
+                    onPress={() => handleConfirmDelivery(idx)}
+                  >
+                    <Text style={styles.confirmBtnText}>
+                      Xác nhận giao hàng
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          ))}
         </View>
 
-        {/* DANH SÁCH ĐƠN */}
-        {orders.map((order, idx) => (
-          <View key={idx} style={{ marginTop: 20 }}>
-            <Text style={{ fontWeight: "700", marginBottom: 6 }}>
-              📦 Đơn hàng {idx + 1}
-            </Text>
+        {/* CARD 2 – GIỮ NGUYÊN */}
+        <View style={[styles.card, { marginTop: 16 }]}>
+          <Text style={styles.title}>
+            🧾 Danh sách khách hàng chưa giao hàng
+          </Text>
 
-            <View style={styles.table}>
-              {[
-                ["Mã đơn hàng", order.order_id],
-                ["Số điện thoại", order.phone],
-                ["Địa chỉ", order.address],
-                ["Loại sản phẩm", order.product],
-                ["Số lượng", order.quantity.toString()],
-                ["Trọng lượng", order.weight.toString()],
-                ["Đơn giá", order.price.toString()],
-                ["Thành tiền", order.total.toString()],
-                ["Trạng thái", order.status],
-              ].map(([label, value], i) => (
-                <View key={i} style={styles.tableRow}>
-                  <Text style={styles.tableLabel}>{label}</Text>
-                  <Text
-                    style={[
-                      styles.tableValue,
-                      label === "Trạng thái" && value === "Đã giao hàng"
-                        ? { color: "#16a34a", fontWeight: "700" }
-                        : {},
-                    ]}
-                  >
-                    {value}
-                  </Text>
+          <View style={styles.table}>
+            {pendingOrders.length === 0 ? (
+              <Text style={{ padding: 10 }}>
+                Không còn đơn hàng nào chưa giao
+              </Text>
+            ) : (
+              pendingOrders.map((o, idx) => (
+                <View key={idx} style={styles.tableRow}>
+                  <Text style={styles.tableLabel}>{o.order_id}</Text>
                 </View>
-              ))}
-            </View>
-
-            {order.status === "Chưa giao hàng" && (
-              <View style={styles.confirmRow}>
-                <TextInput
-                  style={styles.confirmInput}
-                  placeholder="Nhập xác nhận tổng tiền"
-                  keyboardType="numeric"
-                  value={confirmTotals[idx] || ""}
-                  onChangeText={(text) =>
-                    setConfirmTotals((prev) => ({ ...prev, [idx]: text }))
-                  }
-                />
-                <TouchableOpacity
-                  style={styles.confirmBtn}
-                  onPress={() => handleConfirmDelivery(idx)}
-                >
-                  <Text style={styles.confirmBtnText}>Xác nhận giao hàng</Text>
-                </TouchableOpacity>
-              </View>
+              ))
             )}
           </View>
-        ))}
-      </View>
-
-      {/* CARD 2 – GIỮ NGUYÊN */}
-      <View style={[styles.card, { marginTop: 16 }]}>
-        <Text style={styles.title}>🧾 Danh sách khách hàng chưa giao hàng</Text>
-
-        <View style={styles.table}>
-          {pendingOrders.length === 0 ? (
-            <Text style={{ padding: 10 }}>
-              Không còn đơn hàng nào chưa giao
-            </Text>
-          ) : (
-            pendingOrders.map((o, idx) => (
-              <View key={idx} style={styles.tableRow}>
-                <Text style={styles.tableLabel}>{o.order_id}</Text>
-                <Text style={styles.tableValue}>{o.khachhang_id}</Text>
-              </View>
-            ))
-          )}
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 }
 
@@ -335,5 +369,10 @@ const styles = StyleSheet.create({
   confirmBtnText: {
     color: "#fff",
     fontWeight: "600",
+  },
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
 });
